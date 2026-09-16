@@ -3,18 +3,46 @@ import { TenantStore } from './tenant.js';
 import { UI } from './ui.js';
 import { Router } from './router.js';
 import { renderHome } from './pages/home.js';
+import { Auth } from './auth.js';
+import { renderLogin, initLoginPage } from './pages/login.js';
 
 // === Initialize core systems ===
 ThemeManager.init();
 TenantStore.init();
 
-// === Register Service Worker ===
+// === Check Authentication — tampilkan login jika belum login ===
+if (!Auth.isAuthenticated()) {
+  document.getElementById('app').style.display = 'none';
+  document.body.insertAdjacentHTML('beforeend', `<div id="loginRoot">${renderLogin()}</div>`);
+  initLoginPage();
+} else {
+  initAuthenticatedApp();
+}
+
+function initAuthenticatedApp() {
+
+// Update profile info dengan current user
+const currentUser = Auth.getCurrentUser();
+if (currentUser) {
+  const profileNameEl = document.querySelector('.profile-name');
+  const profileRoleEl = document.querySelector('.profile-role');
+  const avatarEl = document.querySelector('.avatar');
+  if (profileNameEl) profileNameEl.textContent = currentUser.name;
+  if (profileRoleEl) profileRoleEl.textContent = currentUser.role === 'admin' ? 'Admin' : 'Kasir';
+  if (avatarEl) avatarEl.textContent = currentUser.avatar;
+
+  // Set tenant aktif sesuai user yang login
+  TenantStore.setCurrent(currentUser.tenant);
+}
+
+// === Service Worker dinonaktifkan sementara (development) ===
+// Cache-nya bikin perubahan file tidak langsung terlihat saat development.
+// Unregister semua SW yang mungkin sudah ter-install dari sesi sebelumnya.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // Silent fail — SW optional
-    });
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => reg.unregister());
   });
+  caches?.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
 }
 
 // === Drawer Toggle ===
@@ -47,6 +75,18 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
 });
 
+// === Logout Button ===
+const logoutBtn = document.querySelector('.logout-btn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', () => {
+    Auth.logout();
+    UI.toast('Anda telah logout', { type: 'success' });
+    setTimeout(() => {
+      window.location.reload();
+    }, 300);
+  });
+}
+
 // === Nav Group Toggle (Stok submenu) ===
 document.querySelectorAll('.nav-toggle').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -71,8 +111,7 @@ document.getElementById('themeToggle').addEventListener('click', () => {
   UI.toast(`Mode ${next === 'dark' ? 'gelap' : 'terang'} aktif`, { type: 'success' });
 });
 
-// === Tenant Switcher ===
-const tenantChip = document.getElementById('tenantChip');
+// === Tenant Display (Read-only) ===
 const tenantNameEl = document.getElementById('tenantName');
 const drawerTenantEl = document.getElementById('drawerTenant');
 
@@ -82,67 +121,7 @@ function updateTenantUI(tenant) {
 }
 
 TenantStore.subscribe(updateTenantUI);
-
-tenantChip.addEventListener('click', async () => {
-  const tenants = TenantStore.getAll();
-  const current = TenantStore.getCurrent();
-  
-  const root = document.getElementById('modalRoot');
-  root.innerHTML = '';
-  
-  const backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop';
-  
-  const dialog = document.createElement('div');
-  dialog.className = 'modal-dialog';
-  dialog.setAttribute('role', 'dialog');
-  
-  dialog.innerHTML = `
-    <h2 class="modal-title">Pilih Tenant</h2>
-    <div class="modal-body">Aktifkan tenant untuk konteks data saat ini.</div>
-    <div class="tenant-list">
-      ${tenants.map(t => `
-        <button class="tenant-option ${t.id === current.id ? 'selected' : ''}" data-tenant="${t.id}">
-          <div class="tenant-option-logo">${t.code}</div>
-          <div class="tenant-option-info">
-            <div class="tenant-option-name">${t.name}</div>
-            <div class="tenant-option-id">${t.id}</div>
-          </div>
-          <svg class="tenant-option-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </button>
-      `).join('')}
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" data-action="close">Tutup</button>
-    </div>
-  `;
-  
-  root.appendChild(backdrop);
-  root.appendChild(dialog);
-  requestAnimationFrame(() => {
-    root.classList.add('visible');
-    root.setAttribute('aria-hidden', 'false');
-  });
-  
-  const close = () => {
-    root.classList.remove('visible');
-    root.setAttribute('aria-hidden', 'true');
-    setTimeout(() => { root.innerHTML = ''; }, 250);
-  };
-  
-  dialog.querySelectorAll('.tenant-option').forEach(opt => {
-    opt.addEventListener('click', () => {
-      TenantStore.setCurrent(opt.dataset.tenant);
-      UI.toast(`Tenant diubah ke ${TenantStore.getCurrent().name}`, { type: 'success' });
-      close();
-    });
-  });
-  
-  dialog.querySelector('[data-action="close"]').onclick = close;
-  backdrop.onclick = close;
-});
+updateTenantUI(TenantStore.getCurrent());
 
 // === Quick Card Navigation ===
 document.addEventListener('click', (e) => {
@@ -195,3 +174,5 @@ function placeholderPage(title, description) {
 setTimeout(() => {
   UI.toast(`Selamat datang di Klontonk POS · ${TenantStore.getCurrent().name}`, { type: 'success' });
 }, 500);
+
+} // end initAuthenticatedApp
