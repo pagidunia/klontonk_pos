@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0060AF" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0A1628" media="(prefers-color-scheme: dark)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="Klontonk POS — Sistem Point of Sales modern untuk bisnis multi-cabang" />
+  
+  <title>Klontonk POS</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  
+  <!-- ============ APP SHELL ============ -->
+  <div id="app" class="app-shell">
+    
+    <!-- HEADER -->
+    <header class="app-header" role="banner">
+      <button 
+        class="icon-btn burger-btn" 
+        id="burgerBtn" 
+        aria-label="Buka menu navigasi"
+        aria-expanded="false"
+        aria-controls="drawer">
+        <span class="burger-line"></span>
+        <span class="burger-line"></span>
+        <span class="burger-line"></span>
+      </button>
+      
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">K</div>
+        <div class="brand-text">
+          <h1 class="brand-name">Klontonk</h1>
+          <span class="brand-tag">POS</span>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <button 
+          class="tenant-chip" 
+          id="tenantChip" 
+          aria-label="Ganti tenant"
+          title="Ganti tenant">
+          <span class="tenant-dot"></span>
+          <span class="tenant-name" id="tenantName">Toko Pusat</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        
+        <button 
+          class="icon-btn theme-toggle" 
+          id="themeToggle" 
+          aria-label="Ganti mode gelap/terang">
+          <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+          </svg>
+          <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+    
+    <!-- DRAWER MENU -->
+    <aside class="drawer" id="drawer" aria-hidden="true" role="navigation">
+      <div class="drawer-header">
+        <div class="drawer-profile">
+          <div class="avatar">A</div>
+          <div class="profile-info">
+            <p class="profile-name">Admin Kasir</p>
+            <p class="profile-role" id="drawerTenant">Toko Pusat</p>
+          </div>
+        </div>
+      </div>
+      
+      <nav class="drawer-nav">
+        <ul class="nav-list">
+          <li>
+            <a href="#/beranda" class="nav-item active" data-route="beranda">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span>Beranda</span>
+            </a>
+          </li>
+          <li>
+            <a href="#/kasir" class="nav-item" data-route="kasir">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                <path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01M6 15h12"></path>
+              </svg>
+              <span>Menu Kasir</span>
+            </a>
+          </li>
+          <li class="nav-group">
+            <button class="nav-item nav-toggle" data-group="stok" aria-expanded="false">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+              <span>Menu Stok</span>
+              <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+            <ul class="nav-sublist" data-sublist="stok">
+              <li><a href="#/stok/awal" data-route="stok-awal">Stok Awal</a></li>
+              <li><a href="#/stok/keluar-laku" data-route="stok-laku">Stok Keluar (Laku)</a></li>
+              <li><a href="#/stok/keluar-mutasi" data-route="stok-mutasi">Stok Keluar (Mutasi)</a></li>
+              <li><a href="#/stok/retur" data-route="stok-retur">Stok Retur</a></li>
+              <li><a href="#/stok/total" data-route="stok-total">Stok Total</a></li>
+            </ul>
+          </li>
+          <li>
+            <a href="#/harga" class="nav-item" data-route="harga">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="1" x2="12" y2="23"></line>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+              <span>Update Harga</span>
+            </a>
+          </li>
+          <li>
+            <a href="#/laporan-kasir" class="nav-item" data-route="laporan-kasir">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+              </svg>
+              <span>Laporan Kasir</span>
+            </a>
+          </li>
+          <li>
+            <a href="#/gudang" class="nav-item" data-route="gudang">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"></path>
+              </svg>
+              <span>Gudang</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+      
+      <div class="drawer-footer">
+        <div class="version-tag">v1.0.0 · Multi-Tenant</div>
+      </div>
+    </aside>
+    
+    <div class="drawer-overlay" id="drawerOverlay"></div>
+    
+    <!-- MAIN CONTENT -->
+    <main class="app-main" id="appMain" role="main">
+      <!-- Konten dirender oleh router -->
+    </main>
+    
+  </div>
+  
+  <!-- ============ CUSTOM MODAL CONTAINER ============ -->
+  <div id="modalRoot" class="modal-root" aria-hidden="true"></div>
+  
+  <!-- ============ TOAST CONTAINER ============ -->
+  <div id="toastRoot" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+  
+  <!-- ============ SCRIPTS ============ -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
