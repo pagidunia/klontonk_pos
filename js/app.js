@@ -79,11 +79,22 @@ document.addEventListener('keydown', (e) => {
 const logoutBtn = document.querySelector('.logout-btn');
 if (logoutBtn) {
   logoutBtn.addEventListener('click', () => {
-    Auth.logout();
-    UI.toast('Anda telah logout', { type: 'success' });
-    setTimeout(() => {
-      window.location.reload();
-    }, 300);
+    UI.modal({
+      title: 'Konfirmasi Keluar',
+      message: 'Apakah Anda yakin ingin logout dari sistem?',
+      icon: 'warning',
+      confirmText: 'Ya, Keluar',
+      cancelText: 'Batal',
+      variant: 'danger'
+    }).then((confirmed) => {
+      if (confirmed) {
+        Auth.logout();
+        UI.toast('Anda telah logout', { type: 'success' });
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      }
+    });
   });
 }
 
