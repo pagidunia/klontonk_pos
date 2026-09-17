@@ -4,10 +4,9 @@
  */
 export const TenantStore = {
   _tenants: [
-    { id: 'T001', name: 'Toko Pusat', code: 'TP' },
-    { id: 'T002', name: 'Cabang Sudirman', code: 'SD' },
-    { id: 'T003', name: 'Cabang Bekasi', code: 'BK' },
-    { id: 'T004', name: 'Gudang Utama', code: 'GU' }
+    { id: 'T001', name: 'Pusat', code: 'TP' },
+    { id: 'T002', name: 'Warung Merah', code: 'WM' },
+    { id: 'T003', name: 'Warung Putih', code: 'WP' }
   ],
   
   _current: null,
