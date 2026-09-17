@@ -110,7 +110,10 @@ document.querySelectorAll('.nav-toggle').forEach(btn => {
 });
 
 // === Close drawer on nav click (mobile) ===
-document.querySelectorAll('.nav-item, .nav-sublist a').forEach(link => {
+// HANYA link navigasi asli (<a>) yang menutup drawer.
+// `.nav-toggle` adalah <button class="nav-item nav-toggle"> — jika ikut match,
+// klik "Menu Stok" langsung menutup drawer sehingga sub-menu tampak "hilang".
+document.querySelectorAll('a.nav-item, .nav-sublist a').forEach(link => {
   link.addEventListener('click', () => {
     if (window.innerWidth < 1024) closeDrawer();
   });
@@ -181,9 +184,41 @@ function placeholderPage(title, description) {
   `;
 }
 
-// === Welcome Toast ===
-setTimeout(() => {
-  UI.toast(`Selamat datang di Klontonk POS · ${TenantStore.getCurrent().name}`, { type: 'success' });
-}, 500);
+// === Welcome Popup — sapaan login + info update & maintenance ===
+// Perbarui data di bawah ini untuk rilis / jadwal maintenance berikutnya.
+const WHATS_NEW = [
+  { color: '#16A34A', title: 'Mode Terang Baru', desc: 'Palet krem hangat yang lebih nyaman dibaca sepanjang hari.' },
+  { color: '#DC2626', title: 'Tombol Logout Lebih Kontras', desc: 'Sekarang tampil solid merah — lebih mudah ditemukan, lebih sulit salah tekan.' },
+  { color: '#0060AF', title: 'Perbaikan Menu Stok', desc: 'Sub-menu Stok tidak lagi tertutup sendiri saat dibuka di layar kecil.' },
+  { color: '#F59E0B', title: 'Navigasi Multi-Tenant', desc: 'Pindah antar cabang tetap ringan langsung dari header.' }
+];
+
+const MAINTENANCE_INFO = [
+  { title: 'Maintenance Terjadwal', desc: 'Minggu, 02.00–03.00 WIB — sebagian fitur mungkin tidak tersedia sementara.' },
+  { title: 'Roadmap Berikutnya', desc: 'Laporan kasir cetak, manajemen gudang, dan sinkronisasi stok antar cabang.' }
+];
+
+function showWelcomePopup() {
+  const user = Auth.getCurrentUser();
+  if (!user) return;
+
+  // Muncul sekali per sesi login (key = waktu login)
+  const seenKey = `klontonk:welcome:${user.loginTime || ''}`;
+  try {
+    if (sessionStorage.getItem(seenKey)) return;
+  } catch (e) { /* storage tidak tersedia — popup tetap tampil */ }
+
+  UI.welcome({
+    name: user.name,
+    tenantName: TenantStore.getCurrent().name,
+    avatar: user.avatar || 'A',
+    updates: WHATS_NEW,
+    maintenance: MAINTENANCE_INFO
+  }).then(() => {
+    try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* abaikan */ }
+  });
+}
+
+setTimeout(showWelcomePopup, 350);
 
 } // end initAuthenticatedApp

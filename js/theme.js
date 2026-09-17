@@ -19,7 +19,7 @@ export const ThemeManager = {
     document.documentElement.setAttribute('data-theme', theme);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', theme === 'dark' ? '#0A1628' : '#0060AF');
+      meta.setAttribute('content', theme === 'dark' ? '#0A1628' : '#EBE4DB');
     }
   },
   

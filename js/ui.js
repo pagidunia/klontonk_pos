@@ -80,6 +80,97 @@ export const UI = {
   },
   
   /**
+   * Welcome Popup — sapaan login + info update & jadwal maintenance
+   * updates/maintenance: array { color?, title, desc? } (konten dikontrol kode)
+   */
+  welcome({ name = '', tenantName = '', avatar = 'A', updates = [], maintenance = [] } = {}) {
+    return new Promise((resolve) => {
+      const root = document.getElementById('modalRoot');
+      root.innerHTML = '';
+
+      const backdrop = document.createElement('div');
+      backdrop.className = 'modal-backdrop';
+
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog welcome-dialog';
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.setAttribute('aria-label', `Selamat datang, ${name}`);
+
+      const updateItems = updates.map((u) => `
+        <li class="welcome-update-item">
+          <span class="welcome-update-dot" style="background:${u.color || 'var(--color-primary)'}"></span>
+          <div>
+            <p class="welcome-update-title">${this._escape(u.title)}</p>
+            ${u.desc ? `<p class="welcome-update-desc">${this._escape(u.desc)}</p>` : ''}
+          </div>
+        </li>
+      `).join('');
+
+      const maintItems = maintenance.map((m) => `
+        <li class="welcome-maint-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <div>
+            <p class="welcome-maint-title">${this._escape(m.title)}</p>
+            ${m.desc ? `<p class="welcome-maint-desc">${this._escape(m.desc)}</p>` : ''}
+          </div>
+        </li>
+      `).join('');
+
+      dialog.innerHTML = `
+        <div class="welcome-banner">
+          <div class="welcome-avatar">${this._escape(avatar)}</div>
+          <div class="welcome-greeting">
+            <p class="welcome-hello">Selamat datang 👋</p>
+            <h2 class="welcome-name">${this._escape(name)}</h2>
+            ${tenantName ? `<p class="welcome-tenant">${this._escape(tenantName)}</p>` : ''}
+          </div>
+        </div>
+        <div class="welcome-body">
+          ${updates.length ? `
+          <p class="welcome-section-label">Yang Baru di Klontonk</p>
+          <ul class="welcome-updates">${updateItems}</ul>` : ''}
+          ${maintenance.length ? `
+          <p class="welcome-section-label">Info Maintenance</p>
+          <ul class="welcome-maint">${maintItems}</ul>` : ''}
+        </div>
+        <div class="modal-actions welcome-actions">
+          <button class="btn btn-primary welcome-close">Lanjutkan</button>
+        </div>
+      `;
+
+      root.appendChild(backdrop);
+      root.appendChild(dialog);
+
+      requestAnimationFrame(() => {
+        root.classList.add('visible');
+        root.setAttribute('aria-hidden', 'false');
+        dialog.querySelector('button').focus();
+      });
+
+      const close = () => {
+        root.classList.remove('visible');
+        root.setAttribute('aria-hidden', 'true');
+        setTimeout(() => { root.innerHTML = ''; }, 250);
+        document.removeEventListener('keydown', onKey);
+        resolve(true);
+      };
+
+      dialog.querySelector('.welcome-close').onclick = close;
+      backdrop.onclick = close;
+
+      const onKey = (e) => {
+        if (e.key === 'Escape') close();
+      };
+      document.addEventListener('keydown', onKey);
+    });
+  },
+  
+  /**
    * Toast Notification
    */
   toast(message, { type = 'info', duration = 3000 } = {}) {
