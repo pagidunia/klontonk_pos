@@ -5,12 +5,18 @@ import { Router } from './router.js';
 import { renderHome } from './pages/home.js';
 import { Auth } from './auth.js';
 import { renderLogin, initLoginPage } from './pages/login.js';
+import { renderUsersPage, initUsersPage } from './pages/users.js';
 
 // === Initialize core systems ===
 ThemeManager.init();
 TenantStore.init();
 
 // === Check Authentication — tampilkan login jika belum login ===
+// WAJIB menunggu inisialisasi auth selesai (verifikasi signature session
+// bersifat async). Tanpa await ini, status login dibaca terlalu dini dan
+// user yang sudah login selalu "dilempar kembali" ke halaman login.
+await Auth.ready;
+
 if (!Auth.isAuthenticated()) {
   document.getElementById('app').style.display = 'none';
   document.body.insertAdjacentHTML('beforeend', `<div id="loginRoot">${renderLogin()}</div>`);
@@ -20,6 +26,8 @@ if (!Auth.isAuthenticated()) {
 }
 
 function initAuthenticatedApp() {
+
+try {
 
 // Update profile info dengan current user
 const currentUser = Auth.getCurrentUser();
@@ -145,8 +153,54 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Cek admin secara defensif — kompatibel dengan semua versi Auth
+// (fallback ke getCurrentUser() jika isAdmin() tidak tersedia)
+function currentIsAdmin() {
+  if (typeof Auth.isAdmin === 'function') return Auth.isAdmin();
+  const u = Auth.getCurrentUser();
+  return !!(u && u.role === 'admin');
+}
+
+// Tampilkan nav "Tambah User" HANYA untuk admin
+(function setupAdminNav() {
+  const navAdmin = document.querySelectorAll('.nav-admin-only');
+  if (currentIsAdmin()) {
+    navAdmin.forEach(el => { el.hidden = false; });
+  } else {
+    navAdmin.forEach(el => { el.remove(); }); // hapus dari DOM — bukan sekadar disembunyikan
+  }
+})();
+
 // === Router Setup ===
 const router = new Router();
+
+// Guard: halaman admin ditolak untuk non-admin (cek ulang saat route diakses)
+const adminGuard = (renderFn, initFn) => () => {
+  if (!currentIsAdmin()) {
+    return `
+      <div class="page-header">
+        <p class="greeting">Akses Ditolak</p>
+        <h1 class="page-title">403</h1>
+        <p class="page-subtitle">Halaman ini hanya dapat diakses oleh Admin.</p>
+      </div>
+      <div class="activity-card" style="text-align:center; padding: 40px 20px;">
+        <div style="width:64px;height:64px;border-radius:var(--radius-lg);background:rgba(220,38,38,0.12);color:var(--color-danger);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+          </svg>
+        </div>
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;">Butuh Hak Akses Admin</h3>
+        <p style="font-size:13px;color:var(--text-secondary);max-width:320px;margin:0 auto;">
+          Jika Anda merasa ini keliru, hubungi admin pusat Anda.
+        </p>
+      </div>
+    `;
+  }
+  // Render normal + init setelah DOM terpasang
+  setTimeout(initFn, 150);
+  return renderFn();
+};
 
 router
   .add('/beranda', renderHome)
@@ -159,6 +213,7 @@ router
   .add('/harga', () => placeholderPage('Update Harga', 'Ubah harga produk secara massal atau per item.'))
   .add('/laporan-kasir', () => placeholderPage('Laporan Kasir', 'Preview dan cetak laporan kasir harian.'))
   .add('/gudang', () => placeholderPage('Gudang', 'Manajemen inventori gudang pusat.'))
+  .add('/users', adminGuard(renderUsersPage, initUsersPage))
   .setNotFound(() => placeholderPage('404', 'Halaman yang Anda tuju tidak ditemukan.'))
   .start();
 
@@ -220,5 +275,30 @@ function showWelcomePopup() {
 }
 
 setTimeout(showWelcomePopup, 350);
+
+} catch (err) {
+  // Jangan biarkan satu error mematikan seluruh app (beranda kosong + nav mati).
+  // Tampilkan pesan yang jelas agar mudah didiagnosis.
+  console.error('[App] Gagal inisialisasi aplikasi:', err);
+  const main = document.getElementById('appMain');
+  if (main) {
+    main.innerHTML = `
+      <div class="page-header">
+        <p class="greeting">Terjadi Kesalahan</p>
+        <h1 class="page-title">Gagal Memuat</h1>
+        <p class="page-subtitle">${String(err && err.message || err).replace(/[<>&"]/g, '')}</p>
+      </div>
+      <div class="activity-card" style="text-align:center; padding: 40px 20px;">
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+          Coba muat ulang halaman. Jika berlanjut, buka Console (F12) untuk detail.
+        </p>
+        <button class="btn btn-primary" id="errReloadBtn">Muat Ulang</button>
+      </div>
+    `;
+    // CSP: JANGAN pakai inline onclick — pasang listener setelah render
+    const reloadBtn = document.getElementById('errReloadBtn');
+    if (reloadBtn) reloadBtn.addEventListener('click', () => window.location.reload());
+  }
+}
 
 } // end initAuthenticatedApp

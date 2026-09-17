@@ -1,39 +1,125 @@
 import { UI } from './ui.js';
 
 // ============ AUTHENTICATION SYSTEM ============
-// Dummy user database stored in JavaScript
-const DUMMY_USERS = {
-  // Admin Pusat
-  admin: {
-    id: 'usr_001',
-    username: 'admin',
-    password: 'admin123',
-    name: 'Admin Pusat',
-    role: 'admin',
-    avatar: 'A',
-    tenant: 'T001'
-  },
-  // Kasir Warung Merah
-  kasir_merah: {
-    id: 'usr_002',
-    username: 'kasir_merah',
-    password: 'kasir123',
-    name: 'Kasir Warung Merah',
-    role: 'cashier',
-    avatar: 'K',
-    tenant: 'T002'
-  },
-  // Kasir Warung Putih
-  kasir_putih: {
-    id: 'usr_003',
-    username: 'kasir_putih',
-    password: 'kasir123',
-    name: 'Kasir Warung Putih',
-    role: 'cashier',
-    avatar: 'K',
-    tenant: 'T003'
+//
+// SECURITY NOTES:
+// - Password TIDAK pernah disimpan dalam bentuk plaintext.
+//   Disimpan sebagai SHA-256(salt + password) dengan salt acak per-user (Web Crypto API).
+// - Session ditandatangani (integrity signature) dengan device key acak,
+//   sehingga manipulasi manual localStorage (mis. mengubah role jadi admin) terdeteksi & ditolak.
+// - Rate limiting: setelah beberapa percobaan gagal, login terkunci sementara (exponential backoff).
+// - Pesan error login selalu generik untuk mencegah user enumeration.
+//
+// CATATAN PRODUKSI: ini masih client-side (demo/offline).
+// Untuk produksi nyata, pindahkan autentikasi ke backend (bcrypt/argon2 + httpOnly cookie).
+
+// Seed awal — password hanya dipakai sekali saat seeding, lalu di-hash.
+const SEED_USERS = [
+  { id: 'usr_001', username: 'admin',       password: 'admin123', name: 'Admin Pusat',        role: 'admin',   avatar: 'A', tenant: 'T001' },
+  { id: 'usr_002', username: 'kasir_merah', password: 'kasir123', name: 'Kasir Warung Merah', role: 'cashier', avatar: 'K', tenant: 'T002' },
+  { id: 'usr_003', username: 'kasir_putih', password: 'kasir123', name: 'Kasir Warung Putih', role: 'cashier', avatar: 'K', tenant: 'T003' }
+];
+
+const USERS_KEY = 'klontonk:users';       // { username: {id,username,salt,hash,name,role,avatar,tenant} }
+const SESSION_KEY = 'klontonk_session';
+const ACTIVITY_KEY = 'klontonk_last_activity';
+const DEVICE_KEY_NAME = 'klontonk:devicekey';
+const THROTTLE_KEY = 'klontonk:auth_throttle';
+
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 menit
+
+// ---- Crypto helpers (Web Crypto API + fallback murni JS) ----
+const _encoder = new TextEncoder();
+
+function _toHex(buf) {
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Fallback SHA-256 murni JavaScript — dipakai saat crypto.subtle tidak tersedia
+// (context non-secure, mis. akses dari HP via http://192.168.x.x:3000).
+const _SHA256_K = [
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+];
+
+function _sha256Sync(str) {
+  const msg = _encoder.encode(str);
+  const l = msg.length;
+  const bitLenHi = Math.floor((l * 8) / 4294967296);
+  const bitLenLo = (l * 8) >>> 0;
+  const paddedLen = (((l + 9) + 63) >> 6) << 6;
+  const padded = new Uint8Array(paddedLen);
+  padded.set(msg);
+  padded[l] = 0x80;
+  const dv = new DataView(padded.buffer);
+  dv.setUint32(paddedLen - 8, bitLenHi);
+  dv.setUint32(paddedLen - 4, bitLenLo);
+
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  const w = new Int32Array(64);
+  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a,
+      h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+
+  for (let off = 0; off < paddedLen; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + _SHA256_K[i] + w[i]) | 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0;
+    h4 = (h4 + e) | 0; h5 = (h5 + f) | 0; h6 = (h6 + g) | 0; h7 = (h7 + h) | 0;
   }
-};
+  return [h0, h1, h2, h3, h4, h5, h6, h7].map(x => (x >>> 0).toString(16).padStart(8, '0')).join('');
+}
+
+async function _sha256(str) {
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.subtle) {
+    const buf = await globalThis.crypto.subtle.digest('SHA-256', _encoder.encode(str));
+    return _toHex(buf);
+  }
+  console.warn('[Auth] crypto.subtle tidak tersedia (context non-secure) — memakai fallback SHA-256 JS.');
+  return _sha256Sync(str);
+}
+
+function _randomSalt() {
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return _toHex(bytes);
+  }
+  // Fallback terakhir (jarang terjadi): PRNG berbasis Math.random
+  let hex = '';
+  for (let i = 0; i < 16; i++) hex += Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+  return hex;
+}
+
+// ---- Storage helpers (aman terhadap storage yang diblokir/disabled) ----
+function _storageGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function _storageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* abaikan */ }
+}
+function _storageRemove(key) {
+  try { localStorage.removeItem(key); } catch (e) { /* abaikan */ }
+}
 
 class AuthManager {
   constructor() {
@@ -41,38 +127,181 @@ class AuthManager {
     this.callbacks = [];
     this.updateActivityBound = this.updateActivity.bind(this);
     this.timeoutInterval = null;
-    this.loadSession();
+    this._seeding = null; // promise cache agar seeding hanya jalan sekali
+    // _loadSession bersifat async (verifikasi signature) — status login hanya
+    // VALID setelah app.js menunggu Auth.ready. Ini mencegah race condition
+    // yang membuat user selalu "dilempar kembali" ke halaman login.
+    this.ready = this._init();
+  }
+
+  async _init() {
+    try {
+      await this._loadSession();
+    } catch (e) {
+      console.error('[Auth] Gagal memuat session:', e);
+      this._clearSession();
+    }
     if (this.isAuthenticated()) {
       this.setupActivityListeners();
       this.startTimeoutCheck();
     }
   }
 
-  // Load session dari localStorage jika ada dengan pengecekan timeout
-  loadSession() {
-    const stored = localStorage.getItem('klontonk_session');
-    if (stored) {
-      try {
-        const lastActivity = parseInt(localStorage.getItem('klontonk_last_activity') || '0', 10);
-        const now = Date.now();
-        const timeoutDuration = 30 * 60 * 1000; // 30 menit
+  // ============ Password Hashing ============
+  // SHA-256(salt + password) — salt acak per-user mencegah rainbow table
+  async _hashPassword(password, salt) {
+    return _sha256(salt + ':' + password);
+  }
 
-        if (lastActivity && (now - lastActivity > timeoutDuration)) {
-          // Session expired
-          localStorage.removeItem('klontonk_session');
-          localStorage.removeItem('klontonk_last_activity');
-          this.currentUser = null;
-        } else {
-          this.currentUser = JSON.parse(stored);
-          // Set aktivitas terakhir ke waktu sekarang untuk sesi yang baru dimuat
-          localStorage.setItem('klontonk_last_activity', now.toString());
-        }
-      } catch (e) {
-        this.currentUser = null;
-        localStorage.removeItem('klontonk_session');
-        localStorage.removeItem('klontonk_last_activity');
-      }
+  // ============ User Store (dengan seeding lazy) ============
+  async _getUsers() {
+    await this._ensureSeeded();
+    try {
+      return JSON.parse(_storageGet(USERS_KEY) || '{}');
+    } catch (e) {
+      return {};
     }
+  }
+
+  _saveUsers(users) {
+    _storageSet(USERS_KEY, JSON.stringify(users));
+  }
+
+  // Seed akun demo pertama kali — password langsung di-hash, plaintext tidak disimpan.
+  // Data korup/tidak-valid otomatis di-reseed agar app tidak pernah "terkunci".
+  _ensureSeeded() {
+    if (this._seeding) return this._seeding;
+    this._seeding = (async () => {
+      let existing = null;
+      try {
+        existing = JSON.parse(_storageGet(USERS_KEY) || 'null');
+      } catch (e) {
+        existing = null;
+      }
+      const valid = existing && typeof existing === 'object' && Object.keys(existing).length > 0;
+      if (valid) return; // sudah ada data user yang sehat
+
+      if (_storageGet(USERS_KEY)) {
+        console.warn('[Auth] Data user korup/kosong — re-seed akun demo.');
+      }
+      const users = {};
+      for (const u of SEED_USERS) {
+        const salt = _randomSalt();
+        users[u.username] = {
+          id: u.id,
+          username: u.username,
+          salt,
+          hash: await this._hashPassword(u.password, salt),
+          name: u.name,
+          role: u.role,
+          avatar: u.avatar,
+          tenant: u.tenant
+        };
+      }
+      this._saveUsers(users);
+    })();
+    return this._seeding;
+  }
+
+  // ============ Device Key (integritas session) ============
+  _getDeviceKey() {
+    let key = _storageGet(DEVICE_KEY_NAME);
+    if (!key) {
+      if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+        const bytes = new Uint8Array(32);
+        globalThis.crypto.getRandomValues(bytes);
+        key = _toHex(bytes);
+      } else {
+        key = String(Date.now()) + String(Math.random()).slice(2) + _randomSalt();
+      }
+      _storageSet(DEVICE_KEY_NAME, key);
+    }
+    return key;
+  }
+
+  async _signSession(sessionData) {
+    // Signature = SHA-256(deviceKey + JSON). Session yang diedit manual via console
+    // tidak akan punya signature cocok dan langsung ditolak saat load.
+    const key = this._getDeviceKey();
+    return _sha256(key + JSON.stringify(sessionData));
+  }
+
+  // ============ Rate Limiting ============
+  _getThrottle() {
+    try {
+      return JSON.parse(_storageGet(THROTTLE_KEY) || '{"count":0,"lockedUntil":0}');
+    } catch (e) {
+      return { count: 0, lockedUntil: 0 };
+    }
+  }
+
+  _setThrottle(t) {
+    _storageSet(THROTTLE_KEY, JSON.stringify(t));
+  }
+
+  _isLockedOut() {
+    return this._getThrottle().lockedUntil > Date.now();
+  }
+
+  _lockoutRemainingMs() {
+    return Math.max(0, this._getThrottle().lockedUntil - Date.now());
+  }
+
+  _recordFailedAttempt() {
+    const t = this._getThrottle();
+    t.count += 1;
+    // Exponential backoff: 3 gagal → 30s, 4 → 1m, 5 → 2m ... maks 15 menit
+    if (t.count >= 3) {
+      const lockMs = Math.min(30000 * Math.pow(2, t.count - 3), 15 * 60 * 1000);
+      t.lockedUntil = Date.now() + lockMs;
+    }
+    this._setThrottle(t);
+  }
+
+  _resetThrottle() {
+    _storageRemove(THROTTLE_KEY);
+  }
+
+  // ============ Session (signed) ============
+  async _persistSession(sessionData) {
+    const sig = await this._signSession(sessionData);
+    this.currentUser = sessionData;
+    _storageSet(SESSION_KEY, JSON.stringify({ ...sessionData, _sig: sig }));
+    _storageSet(ACTIVITY_KEY, Date.now().toString());
+  }
+
+  async _loadSession() {
+    const stored = _storageGet(SESSION_KEY);
+    if (!stored) return;
+    try {
+      const data = JSON.parse(stored);
+      const lastActivity = parseInt(_storageGet(ACTIVITY_KEY) || '0', 10);
+      const now = Date.now();
+
+      if (lastActivity && (now - lastActivity > SESSION_TIMEOUT_MS)) {
+        this._clearSession();
+        return;
+      }
+
+      // Verifikasi integritas — tolak session yang dimodifikasi manual
+      const { _sig, ...sessionData } = data;
+      const expected = await this._signSession(sessionData);
+      if (!_sig || _sig !== expected) {
+        this._clearSession();
+        return;
+      }
+
+      this.currentUser = sessionData;
+      _storageSet(ACTIVITY_KEY, now.toString());
+    } catch (e) {
+      this._clearSession();
+    }
+  }
+
+  _clearSession() {
+    this.currentUser = null;
+    _storageRemove(SESSION_KEY);
+    _storageRemove(ACTIVITY_KEY);
   }
 
   // Update aktivitas terakhir (dengan throttle 5 detik agar efisien)
@@ -132,19 +361,40 @@ class AuthManager {
     }, 10000);
   }
 
-  // Login dengan username & password
-  login(username, password) {
-    const user = DUMMY_USERS[username];
-
-    if (!user) {
-      return { success: false, error: 'Username tidak ditemukan' };
+  // ============ Login ============
+  // ASYNC. Mengembalikan { success } atau { success:false, error }.
+  // Error selalu generik untuk mencegah user enumeration.
+  async login(username, password) {
+    // Rate limit check
+    if (this._isLockedOut()) {
+      const sisa = Math.ceil(this._lockoutRemainingMs() / 1000);
+      return {
+        success: false,
+        error: `Terlalu banyak percobaan. Coba lagi dalam ${sisa} detik.`,
+        locked: true
+      };
     }
 
-    if (user.password !== password) {
-      return { success: false, error: 'Password salah' };
+    // Delay acak kecil untuk meratakan timing response (anti timing attack)
+    const minLen = Math.min(String(username || '').length, 64);
+    await new Promise(r => setTimeout(r, 200 + Math.floor(Math.random() * 150) + minLen));
+
+    const users = await this._getUsers();
+    const user = users[username];
+
+    // Selalu jalankan hashing meski user tidak ada — timing konsisten
+    const salt = user ? user.salt : _randomSalt();
+    const attemptHash = await this._hashPassword(password, salt);
+    const valid = !!user && this._timingSafeEqual(attemptHash, user.hash);
+
+    if (!valid) {
+      this._recordFailedAttempt();
+      return { success: false, error: 'Username atau password salah.' };
     }
 
-    // Store user (tanpa password) ke localStorage
+    // Sukses — reset throttle
+    this._resetThrottle();
+
     const sessionData = {
       id: user.id,
       username: user.username,
@@ -155,15 +405,133 @@ class AuthManager {
       loginTime: new Date().toISOString()
     };
 
-    this.currentUser = sessionData;
-    localStorage.setItem('klontonk_session', JSON.stringify(sessionData));
-    localStorage.setItem('klontonk_last_activity', Date.now().toString());
+    await this._persistSession(sessionData);
 
     this.setupActivityListeners();
     this.startTimeoutCheck();
 
     this.notifySubscribers();
     return { success: true, user: this.currentUser };
+  }
+
+  // Perbandingan konstanta-waktu — mencegah timing attack pada hash check
+  _timingSafeEqual(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) {
+      diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return diff === 0;
+  }
+
+  // ============ Manajemen User (ADMIN ONLY) ============
+  _requireAdmin() {
+    if (!this.currentUser || this.currentUser.role !== 'admin') {
+      return { ok: false, error: 'Akses ditolak. Fitur ini hanya untuk Admin.' };
+    }
+    return { ok: true };
+  }
+
+  // Daftar user (safe fields — tanpa hash/salt) — admin only
+  async listUsers() {
+    const guard = this._requireAdmin();
+    if (!guard.ok) return { success: false, error: guard.error };
+    const users = await this._getUsers();
+    return {
+      success: true,
+      users: Object.values(users).map(u => ({
+        id: u.id,
+        username: u.username,
+        name: u.name,
+        role: u.role,
+        avatar: u.avatar,
+        tenant: u.tenant
+      }))
+    };
+  }
+
+  // Tambah user baru — admin only, dengan validasi & sanitasi input ketat
+  async createUser({ username, password, name, role = 'cashier', tenant = 'T001' } = {}) {
+    const guard = this._requireAdmin();
+    if (!guard.ok) return { success: false, error: guard.error };
+
+    const uname = String(username || '').trim().toLowerCase();
+
+    if (!uname || !password || !String(name || '').trim()) {
+      return { success: false, error: 'Semua field wajib diisi.' };
+    }
+    if (!/^[a-z0-9_.]{3,24}$/.test(uname)) {
+      return { success: false, error: 'Username 3–24 karakter, hanya huruf kecil, angka, titik, underscore.' };
+    }
+    if (String(name).trim().length > 60) {
+      return { success: false, error: 'Nama maksimal 60 karakter.' };
+    }
+    if (typeof password !== 'string' || password.length < 8) {
+      return { success: false, error: 'Password minimal 8 karakter.' };
+    }
+    if (password.length > 128) {
+      return { success: false, error: 'Password maksimal 128 karakter.' };
+    }
+    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return { success: false, error: 'Password harus mengandung huruf dan angka.' };
+    }
+    if (password.toLowerCase().includes(uname)) {
+      return { success: false, error: 'Password tidak boleh mengandung username.' };
+    }
+    if (!['admin', 'cashier'].includes(role)) {
+      return { success: false, error: 'Role tidak valid.' };
+    }
+    if (!/^T\d{3}$/.test(String(tenant))) {
+      return { success: false, error: 'Tenant tidak valid.' };
+    }
+
+    const users = await this._getUsers();
+
+    if (users[uname]) {
+      return { success: false, error: 'Username sudah digunakan.' };
+    }
+
+    const salt = _randomSalt();
+    const id = 'usr_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+
+    users[uname] = {
+      id,
+      username: uname,
+      salt,
+      hash: await this._hashPassword(password, salt),
+      name: String(name).trim(),
+      role,
+      avatar: String(name).trim().charAt(0).toUpperCase(),
+      tenant: String(tenant)
+    };
+
+    this._saveUsers(users);
+    return { success: true, user: { id, username: uname, name: users[uname].name, role, tenant: String(tenant) } };
+  }
+
+  // Hapus user — admin only. Tidak boleh hapus diri sendiri / admin terakhir.
+  async deleteUser(username) {
+    const guard = this._requireAdmin();
+    if (!guard.ok) return { success: false, error: guard.error };
+
+    const users = await this._getUsers();
+    const uname = String(username || '').trim().toLowerCase();
+
+    if (!users[uname]) {
+      return { success: false, error: 'User tidak ditemukan.' };
+    }
+    if (this.currentUser && uname === this.currentUser.username) {
+      return { success: false, error: 'Tidak bisa menghapus akun Anda sendiri.' };
+    }
+
+    const admins = Object.values(users).filter(u => u.role === 'admin');
+    if (users[uname].role === 'admin' && admins.length <= 1) {
+      return { success: false, error: 'Minimal harus ada satu Admin.' };
+    }
+
+    delete users[uname];
+    this._saveUsers(users);
+    return { success: true };
   }
 
   // Logout
@@ -188,6 +556,11 @@ class AuthManager {
     return this.currentUser;
   }
 
+  // Role helpers — dipakai untuk guard UI & routing
+  isAdmin() {
+    return this.currentUser !== null && this.currentUser.role === 'admin';
+  }
+
   // Subscribe ke perubahan auth state
   subscribe(callback) {
     this.callbacks.push(callback);
@@ -198,15 +571,6 @@ class AuthManager {
 
   notifySubscribers() {
     this.callbacks.forEach(cb => cb(this.currentUser));
-  }
-
-  // Get dummy users untuk testing (password hidden)
-  getDummyUsers() {
-    return Object.values(DUMMY_USERS).map(user => ({
-      username: user.username,
-      name: user.name,
-      role: user.role
-    }));
   }
 }
 

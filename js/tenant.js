@@ -13,21 +13,33 @@ export const TenantStore = {
   _listeners: new Set(),
   
   init() {
-    const saved = localStorage.getItem('klontonk:tenant');
-    this._current = saved 
-      ? this._tenants.find(t => t.id === saved) 
-      : this._tenants[0];
+    let saved = null;
+    try {
+      saved = localStorage.getItem('klontonk:tenant');
+    } catch (e) { /* storage tidak tersedia */ }
+    const found = saved ? this._tenants.find(t => t.id === saved) : null;
+    // GUARD: nilai tersimpan yang tidak valid (atau storage kosong) fallback ke tenant pertama.
+    // Tanpa ini, _current bisa undefined dan setCurrent() crash → seluruh app mati
+    // (beranda kosong, navigasi tidak terpasang).
+    this._current = found || this._tenants[0];
   },
   
   getAll() { return [...this._tenants]; },
   
-  getCurrent() { return this._current; },
+  getCurrent() {
+    // GUARD: jangan pernah mengembalikan null/undefined
+    if (!this._current) this.init();
+    return this._current;
+  },
   
   setCurrent(tenantId) {
     const tenant = this._tenants.find(t => t.id === tenantId);
-    if (!tenant || tenant.id === this._current.id) return;
+    if (!tenant) return; // ID tak dikenal → abaikan, biarkan tenant aktif
+    if (this._current && tenant.id === this._current.id) return;
     this._current = tenant;
-    localStorage.setItem('klontonk:tenant', tenantId);
+    try {
+      localStorage.setItem('klontonk:tenant', tenantId);
+    } catch (e) { /* abaikan */ }
     this._listeners.forEach(fn => fn(tenant));
   },
   

@@ -80,8 +80,10 @@ export function initLoginPage() {
   const errorEl = document.getElementById('loginError');
   const usernameInput = document.getElementById('username');
   const passwordInput = document.getElementById('password');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const btnText = submitBtn.querySelector('.btn-text');
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorEl.textContent = '';
 
@@ -93,17 +95,33 @@ export function initLoginPage() {
       return;
     }
 
-    const result = Auth.login(username, password);
+    // Cegah double-submit selama proses autentikasi
+    submitBtn.disabled = true;
+    submitBtn.setAttribute('aria-busy', 'true');
+    btnText.textContent = 'Memproses...';
 
-    if (result.success) {
-      UI.toast(`Selamat datang, ${result.user.name}!`, { type: 'success' });
-      setTimeout(() => {
-        window.location.reload();
-      }, 300);
-    } else {
-      errorEl.textContent = result.error;
-      passwordInput.value = '';
-      usernameInput.focus();
+    try {
+      const result = await Auth.login(username, password);
+
+      if (result.success) {
+        UI.toast(`Selamat datang, ${result.user.name}!`, { type: 'success' });
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      } else {
+        // Pesan error generik dari Auth (anti user enumeration & rate limit)
+        errorEl.textContent = result.error;
+        passwordInput.value = '';
+        usernameInput.focus();
+      }
+    } catch (err) {
+      console.error('[Auth] Login gagal (error tak terduga):', err);
+      errorEl.textContent = 'Terjadi kesalahan. Coba lagi.';
+      errorEl.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.removeAttribute('aria-busy');
+      btnText.textContent = 'Masuk';
     }
   });
 

@@ -6,8 +6,15 @@
   <meta name="theme-color" content="#0060AF" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0A1628" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="description" content="Klontonk POS — Sistem Point of Sales modern untuk bisnis multi-cabang" />
+  <!-- Content Security Policy:
+       - script: diri sendiri + hash script Live Server (dev hot-reload)
+       - connect: ws/wss untuk websocket Live Server
+       - 'frame-ancestors' dihapus (tidak valid via <meta>) -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'sha256-vvf4KNwuNr51XfE5m+hcqNEGhOiOfZzG97ccfQGsPwuE='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss:; base-uri 'self'; form-action 'self'" />
   
   <title>Klontonk POS</title>
   <link rel="manifest" href="manifest.json" />
@@ -152,6 +159,18 @@
               <span>Gudang</span>
             </a>
           </li>
+          <!-- Admin-only: disembunyikan/hapus via JS untuk non-admin -->
+          <li class="nav-admin-only" hidden>
+            <a href="#/users" class="nav-item" data-route="users">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="8.5" cy="7" r="4"></circle>
+                <line x1="20" y1="8" x2="20" y2="14"></line>
+                <line x1="23" y1="11" x2="17" y2="11"></line>
+              </svg>
+              <span>Tambah User</span>
+            </a>
+          </li>
         </ul>
       </nav>
       
@@ -184,6 +203,7 @@
   <div id="toastRoot" class="toast-root" aria-live="polite" aria-atomic="true"></div>
   
   <!-- ============ SCRIPTS ============ -->
-  <script type="module" src="js/app.js"></script>
+  <!-- v1.1.0: cache-busting — naikkan versi setiap rilis -->
+  <script type="module" src="js/app.js?v=1.1.0"></script>
 </body>
 </html>
