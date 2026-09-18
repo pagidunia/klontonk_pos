@@ -53,79 +53,117 @@ if ('serviceWorker' in navigator) {
   caches?.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
 }
 
-// === Drawer Toggle ===
-const burgerBtn = document.getElementById('burgerBtn');
-const drawer = document.getElementById('drawer');
-const drawerOverlay = document.getElementById('drawerOverlay');
+// === Versi Aplikasi ===
+const APP_VERSION = '1.1.0';
 
-function openDrawer() {
-  drawer.classList.add('open');
-  drawerOverlay.classList.add('visible');
-  burgerBtn.setAttribute('aria-expanded', 'true');
-  drawer.setAttribute('aria-hidden', 'false');
+// === Ikon untuk Bottom Sheet ===
+const SHEET_ICONS = {
+  box: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
+  dollar: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>',
+  warehouse: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"></path></svg>',
+  userPlus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>',
+  user: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+  gear: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
+  info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+  logout: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>'
+};
+
+// === Navigasi via hash ===
+function navigate(path) {
+  window.location.hash = path;
 }
 
-function closeDrawer() {
-  drawer.classList.remove('open');
-  drawerOverlay.classList.remove('visible');
-  burgerBtn.setAttribute('aria-expanded', 'false');
-  drawer.setAttribute('aria-hidden', 'true');
-}
+// === Bottom Navigation ===
+const bottomNav = document.getElementById('bottomNav');
+if (bottomNav) {
+  // Tab langsung: Beranda, Transaksi, Laporan
+  bottomNav.querySelectorAll('[data-route]').forEach(btn => {
+    btn.addEventListener('click', () => navigate(btn.dataset.route));
+  });
 
-burgerBtn.addEventListener('click', () => {
-  const isOpen = drawer.classList.contains('open');
-  isOpen ? closeDrawer() : openDrawer();
-});
-
-drawerOverlay.addEventListener('click', closeDrawer);
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
-});
-
-// === Logout Button ===
-const logoutBtn = document.querySelector('.logout-btn');
-if (logoutBtn) {
-  logoutBtn.addEventListener('click', () => {
-    UI.modal({
-      title: 'Konfirmasi Keluar',
-      message: 'Apakah Anda yakin ingin logout dari sistem?',
-      icon: 'warning',
-      confirmText: 'Ya, Keluar',
-      cancelText: 'Batal',
-      variant: 'danger'
-    }).then((confirmed) => {
-      if (confirmed) {
-        Auth.logout();
-        UI.toast('Anda telah logout', { type: 'success' });
-        setTimeout(() => {
-          window.location.reload();
-        }, 300);
-      }
+  // Tab Stok → sheet sub-menu stok
+  const stokTab = bottomNav.querySelector('[data-tab="stok"]');
+  if (stokTab) stokTab.addEventListener('click', async () => {
+    const sel = await UI.sheet({
+      title: 'Menu Stok',
+      items: [
+        { id: '/stok/awal', label: 'Stok Awal', desc: 'Input & lihat stok awal periode', icon: SHEET_ICONS.box },
+        { id: '/stok/keluar-laku', label: 'Stok Keluar (Laku)', desc: 'Stok keluar akibat penjualan', icon: SHEET_ICONS.box },
+        { id: '/stok/keluar-mutasi', label: 'Stok Keluar (Mutasi)', desc: 'Mutasi antar cabang/gudang', icon: SHEET_ICONS.box },
+        { id: '/stok/retur', label: 'Stok Retur', desc: 'Proses & laporan retur barang', icon: SHEET_ICONS.box },
+        { id: '/stok/total', label: 'Stok Total', desc: 'Rekap stok seluruh SKU', icon: SHEET_ICONS.box }
+      ]
     });
+    if (sel) navigate(sel.id);
+  });
+
+  // Tab Lainnya → sheet menu sekunder (Tambah User hanya admin)
+  const lainnyaTab = bottomNav.querySelector('[data-tab="lainnya"]');
+  if (lainnyaTab) lainnyaTab.addEventListener('click', async () => {
+    const items = [
+      { id: '/harga', label: 'Update Harga', desc: 'Ubah harga massal / per item', icon: SHEET_ICONS.dollar },
+      { id: '/gudang', label: 'Gudang', desc: 'Inventori gudang pusat', icon: SHEET_ICONS.warehouse }
+    ];
+    if (currentIsAdmin()) {
+      items.push({ id: '/users', label: 'Tambah User', desc: 'Kelola akun admin & kasir', icon: SHEET_ICONS.userPlus });
+    }
+    const sel = await UI.sheet({ title: 'Lainnya', items });
+    if (sel) navigate(sel.id);
   });
 }
 
-// === Nav Group Toggle (Stok submenu) ===
-document.querySelectorAll('.nav-toggle').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const group = btn.dataset.group;
-    const sublist = document.querySelector(`[data-sublist="${group}"]`);
-    const expanded = btn.getAttribute('aria-expanded') === 'true';
-    btn.setAttribute('aria-expanded', !expanded);
-    sublist.classList.toggle('open');
+// === Tombol Akun (burger) → sheet akun ===
+const accountBtn = document.getElementById('accountBtn');
+if (accountBtn) {
+  accountBtn.addEventListener('click', async () => {
+    const user = Auth.getCurrentUser();
+    if (!user) return;
+    const tenant = TenantStore.getCurrent();
+    const sel = await UI.sheet({
+      side: 'left',
+      profile: {
+        avatar: user.avatar,
+        name: user.name,
+        role: user.role === 'admin' ? 'Admin' : 'Kasir',
+        tenant: tenant ? tenant.name : ''
+      },
+      items: [
+        { id: 'akun', label: 'Informasi Akun', desc: '@' + user.username, icon: SHEET_ICONS.user },
+        { id: 'pengaturan', label: 'Pengaturan', desc: 'Tema & preferensi', icon: SHEET_ICONS.gear },
+        { id: 'versi', label: 'Versi Aplikasi', desc: 'v' + APP_VERSION + ' · Multi-Tenant', icon: SHEET_ICONS.info },
+        { id: 'logout', label: 'Logout', danger: true, icon: SHEET_ICONS.logout }
+      ]
+    });
+    if (!sel) return;
+    if (sel.id === 'akun') navigate('/akun');
+    else if (sel.id === 'pengaturan') navigate('/pengaturan');
+    else if (sel.id === 'versi') UI.toast('Klontonk POS v' + APP_VERSION, { type: 'info' });
+    else if (sel.id === 'logout') confirmLogout();
   });
-});
+}
 
-// === Close drawer on nav click (mobile) ===
-// HANYA link navigasi asli (<a>) yang menutup drawer.
-// `.nav-toggle` adalah <button class="nav-item nav-toggle"> — jika ikut match,
-// klik "Menu Stok" langsung menutup drawer sehingga sub-menu tampak "hilang".
-document.querySelectorAll('a.nav-item, .nav-sublist a').forEach(link => {
-  link.addEventListener('click', () => {
-    if (window.innerWidth < 1024) closeDrawer();
+// === Logout (konfirmasi) — dipakai sheet akun & halaman Informasi Akun ===
+function confirmLogout() {
+  UI.modal({
+    title: 'Konfirmasi Keluar',
+    message: 'Apakah Anda yakin ingin logout dari sistem?',
+    icon: 'warning',
+    confirmText: 'Ya, Keluar',
+    cancelText: 'Batal',
+    variant: 'danger'
+  }).then((confirmed) => {
+    if (confirmed) {
+      Auth.logout();
+      UI.toast('Anda telah logout', { type: 'success' });
+      setTimeout(() => {
+        window.location.reload();
+      }, 300);
+    }
   });
-});
+}
+
+// (Navigasi drawer sidebar telah diganti Bottom Navigation + Bottom Sheet.
+//  Sub-menu Stok & menu sekunder kini dibuka lewat sheet pada tab Stok/Lainnya.)
 
 // === Theme Toggle ===
 document.getElementById('themeToggle').addEventListener('click', () => {
@@ -134,12 +172,12 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 });
 
 // === Tenant Display (Read-only) ===
+// GUARD: elemen tenant hanya ada di header — jangan referensi elemen drawer
+// yang sudah dihapus (menyebabkan crash "Cannot set properties of null").
 const tenantNameEl = document.getElementById('tenantName');
-const drawerTenantEl = document.getElementById('drawerTenant');
 
 function updateTenantUI(tenant) {
-  tenantNameEl.textContent = tenant.name;
-  drawerTenantEl.textContent = tenant.name;
+  if (tenantNameEl) tenantNameEl.textContent = tenant.name;
 }
 
 TenantStore.subscribe(updateTenantUI);
@@ -204,7 +242,9 @@ const adminGuard = (renderFn, initFn) => () => {
 
 router
   .add('/beranda', renderHome)
-  .add('/kasir', () => placeholderPage('Menu Kasir', 'Halaman kasir akan menampilkan layar transaksi.'))
+  .add('/kasir', () => placeholderPage('Transaksi', 'Layar transaksi kasir sedang dalam pengembangan.'))
+  .add('/akun', () => { setTimeout(initAccountPage, 150); return accountPage(); })
+  .add('/pengaturan', () => { setTimeout(initSettingsPage, 150); return settingsPage(); })
   .add('/stok/awal', () => placeholderPage('Stok Awal', 'Input dan lihat stok awal periode.'))
   .add('/stok/keluar-laku', () => placeholderPage('Stok Keluar — Laku', 'Laporan stok keluar akibat penjualan.'))
   .add('/stok/keluar-mutasi', () => placeholderPage('Stok Keluar — Mutasi', 'Laporan mutasi antar cabang/gudang.'))
@@ -271,6 +311,87 @@ function showWelcomePopup() {
     maintenance: MAINTENANCE_INFO
   }).then(() => {
     try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* abaikan */ }
+  });
+}
+
+// === Halaman Informasi Akun ===
+function accountPage() {
+  const user = Auth.getCurrentUser() || {};
+  const tenant = TenantStore.getCurrent() || {};
+  const roleLabel = user.role === 'admin' ? 'Admin' : 'Kasir';
+  const loginAt = user.loginTime ? new Date(user.loginTime).toLocaleString('id-ID') : '-';
+  return `
+    <div class="page-header">
+      <p class="greeting">Akun</p>
+      <h1 class="page-title">Informasi Akun</h1>
+      <p class="page-subtitle">Detail akun yang sedang login di perangkat ini.</p>
+    </div>
+    <div class="activity-card" style="padding: 24px;">
+      <div class="account-head">
+        <div class="avatar account-avatar">${UI._escape(user.avatar || 'A')}</div>
+        <div>
+          <p class="profile-name" style="font-size:18px;">${UI._escape(user.name || '-')}</p>
+          <p class="profile-role">${UI._escape(roleLabel)} · @${UI._escape(user.username || '-')}</p>
+        </div>
+      </div>
+      <div class="account-rows">
+        <div class="account-row"><span>Role</span><span class="role-badge ${user.role === 'admin' ? 'role-admin' : 'role-cashier'}">${UI._escape(roleLabel)}</span></div>
+        <div class="account-row"><span>Tenant</span><span>${UI._escape(tenant.name || '-')}</span></div>
+        <div class="account-row"><span>Login terakhir</span><span>${UI._escape(loginAt)}</span></div>
+        <div class="account-row"><span>Versi Aplikasi</span><span class="version-tag">v${APP_VERSION}</span></div>
+      </div>
+      <button class="logout-btn" id="accountLogoutBtn" style="margin-bottom:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        <span>Logout</span>
+      </button>
+    </div>
+  `;
+}
+
+function initAccountPage() {
+  const btn = document.getElementById('accountLogoutBtn');
+  if (btn) btn.addEventListener('click', confirmLogout);
+}
+
+// === Halaman Pengaturan ===
+function settingsPage() {
+  const theme = document.documentElement.getAttribute('data-theme') || 'light';
+  const tenant = TenantStore.getCurrent() || {};
+  return `
+    <div class="page-header">
+      <p class="greeting">Preferensi</p>
+      <h1 class="page-title">Pengaturan</h1>
+      <p class="page-subtitle">Sesuaikan tampilan aplikasi.</p>
+    </div>
+    <div class="activity-card" style="padding: 24px;">
+      <h2 class="section-title" style="margin-bottom:12px;">Tema Tampilan</h2>
+      <div class="theme-options">
+        <button class="theme-option ${theme !== 'dark' ? 'active' : ''}" data-theme-pick="light">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>
+          Terang
+        </button>
+        <button class="theme-option ${theme === 'dark' ? 'active' : ''}" data-theme-pick="dark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          Gelap
+        </button>
+      </div>
+      <div class="account-rows" style="margin-top:16px; margin-bottom:0;">
+        <div class="account-row"><span>Tenant aktif</span><span>${UI._escape(tenant.name || '-')}</span></div>
+        <div class="account-row"><span>Versi Aplikasi</span><span class="version-tag">v${APP_VERSION} · Multi-Tenant</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function initSettingsPage() {
+  document.querySelectorAll('[data-theme-pick]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pick = btn.dataset.themePick;
+      ThemeManager.apply(pick);
+      try { localStorage.setItem('klontonk:theme', pick); } catch (e) { /* abaikan */ }
+      document.querySelectorAll('[data-theme-pick]').forEach(b => b.classList.toggle('active', b.dataset.themePick === pick));
+      UI.toast('Mode ' + (pick === 'dark' ? 'gelap' : 'terang') + ' aktif', { type: 'success' });
+    });
   });
 }
 

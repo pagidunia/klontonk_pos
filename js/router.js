@@ -28,9 +28,17 @@ export class Router {
     const hash = window.location.hash.slice(1) || '/beranda';
     const handler = this.routes.get(hash) || this._notFound;
     
-    // Update active nav
-    document.querySelectorAll('.nav-item, .nav-sublist a').forEach(el => {
-      el.classList.toggle('active', el.getAttribute('href') === `#${hash}`);
+    // Update active tab di Bottom Navigation (prefix match)
+    const tabFor = (h) => {
+      if (h === '/' || h === '/beranda') return 'beranda';
+      if (h.startsWith('/stok')) return 'stok';
+      if (h.startsWith('/kasir')) return 'transaksi';
+      if (h.startsWith('/laporan')) return 'laporan';
+      return null;
+    };
+    const activeTab = tabFor(hash);
+    document.querySelectorAll('.bottom-tab').forEach(el => {
+      el.classList.toggle('active', el.dataset.tab === activeTab);
     });
     
     // Render with subtle transition

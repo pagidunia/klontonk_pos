@@ -74,8 +74,8 @@ export function renderHome() {
             </svg>
           </div>
           <div>
-            <div class="quick-card-title">Menu Kasir</div>
-            <div class="quick-card-desc">Mulai transaksi baru</div>
+            <div class="quick-card-title">Transaksi</div>
+            <div class="quick-card-desc">Transaksi penjualan baru</div>
           </div>
         </button>
         

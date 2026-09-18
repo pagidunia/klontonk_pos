@@ -171,6 +171,78 @@ export const UI = {
   },
   
   /**
+   * Bottom Sheet — menu pilihan slide-up dari bawah layar
+   * items: [{ id, label, desc?, icon? (svg string), danger? }]
+   * profile: { avatar, name, role, tenant } — header opsional
+   * resolve(item) saat item dipilih, resolve(null) saat ditutup (backdrop/Escape)
+   */
+  sheet({ title = '', profile = null, items = [], side = 'up' } = {}) {
+    return new Promise((resolve) => {
+      const root = document.getElementById('sheetRoot');
+      if (!root) { resolve(null); return; }
+      root.innerHTML = '';
+
+      const backdrop = document.createElement('div');
+      backdrop.className = 'sheet-backdrop';
+
+      const panel = document.createElement('div');
+      panel.className = 'sheet' + (side === 'right' ? ' side-right' : side === 'left' ? ' side-left' : '');
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-modal', 'true');
+
+      const itemsHtml = items.map((it, i) => `
+        <button class="sheet-item ${it.danger ? 'danger' : ''}" data-index="${i}" style="--i:${i}">
+          ${it.icon ? `<span class="sheet-item-icon">${it.icon}</span>` : ''}
+          <span class="sheet-item-text">
+            <span class="sheet-item-label">${this._escape(it.label)}</span>
+            ${it.desc ? `<span class="sheet-item-desc">${this._escape(it.desc)}</span>` : ''}
+          </span>
+        </button>
+      `).join('');
+
+      panel.innerHTML = `
+        <div class="sheet-handle" aria-hidden="true"></div>
+        ${profile ? `
+        <div class="sheet-profile">
+          <div class="avatar">${this._escape(profile.avatar || 'A')}</div>
+          <div class="profile-info">
+            <p class="profile-name">${this._escape(profile.name)}</p>
+            <p class="profile-role">${this._escape(profile.role || '')}${profile.tenant ? ' · ' + this._escape(profile.tenant) : ''}</p>
+          </div>
+        </div>` : ''}
+        ${title ? `<p class="sheet-title">${this._escape(title)}</p>` : ''}
+        <div class="sheet-items">${itemsHtml}</div>
+      `;
+
+      root.appendChild(backdrop);
+      root.appendChild(panel);
+
+      requestAnimationFrame(() => {
+        root.classList.add('open');
+        root.setAttribute('aria-hidden', 'false');
+      });
+
+      const close = (value) => {
+        root.classList.remove('open');
+        root.setAttribute('aria-hidden', 'true');
+        document.removeEventListener('keydown', onKey);
+        setTimeout(() => { root.innerHTML = ''; }, 300);
+        resolve(value);
+      };
+
+      panel.querySelectorAll('.sheet-item').forEach(btn => {
+        btn.addEventListener('click', () => close(items[Number(btn.dataset.index)]));
+      });
+      backdrop.addEventListener('click', () => close(null));
+
+      const onKey = (e) => {
+        if (e.key === 'Escape') close(null);
+      };
+      document.addEventListener('keydown', onKey);
+    });
+  },
+  
+  /**
    * Toast Notification
    */
   toast(message, { type = 'info', duration = 3000 } = {}) {
