@@ -1,8 +1,11 @@
 import { TenantStore } from './tenant.js';
 
-// Penyimpanan stok awal per tenant (localStorage). Validasi dilakukan di sini,
-// halaman hanya lapisan tampilan.
-const KEY_PREFIX = 'klontonk:stok-awal:';
+// Stok & harga per tenant. Sumber datanya blok STOCK_DATA di bawah (tanpa Local Storage).
+// Setiap tambah/edit/hapus/ubah harga, data dikirim ke server.mjs (PUT api/stock) yang
+// menulis ulang blok itu di file ini. Jangan hapus penanda BEGIN/END STOCK_DATA.
+// Validasi dilakukan di sini (dan diulang di server.mjs); halaman hanya lapisan tampilan.
+const SAVE_URL = 'api/stock';
+const LEGACY_KEY_PREFIX = 'klontonk:stok-awal:';
 const MAX_QTY = 1000000;
 export const MAX_PRICE = 100000000;
 const NAME_PATTERN = /^[\p{L}\p{N} .,'()&/+-]{2,60}$/u;
@@ -12,48 +15,275 @@ const sameBarcode = (a, b) => String(a || '').toLowerCase() === String(b || '').
 
 export const UNITS = ['pcs', 'kg', 'liter', 'pak', 'bungkus', 'dus', 'karung', 'renceng'];
 
-// Data awal (jumlah bersifat contoh/dummy).
-const SEED_ITEMS = [
-  { name: 'Beras Lahap', qty: 100, unit: 'kg' },
-  { name: 'Gulaku', qty: 60, unit: 'pak' },
-  { name: 'Minyak Goreng Sania', qty: 48, unit: 'pcs' },
-  { name: 'Tepung Segitiga', qty: 35, unit: 'pak' },
-  { name: 'Garam Kapal', qty: 50, unit: 'bungkus' },
-  { name: 'Mie Sedap Goreng', qty: 12, unit: 'dus' },
-  { name: 'Telur Ayam', qty: 25, unit: 'kg' },
-  { name: 'Kopi Kapal Api', qty: 20, unit: 'renceng' },
-  { name: 'Teh Poci', qty: 15, unit: 'pak' }
-];
+// BEGIN STOCK_DATA
+const STOCK_DATA = {
+  "T001": [
+    {
+      "id": "stk_seed_0",
+      "name": "Beras Lahap",
+      "qty": 100,
+      "unit": "kg",
+      "price": 65000
+    },
+    {
+      "id": "stk_seed_1",
+      "name": "Gulaku",
+      "qty": 60,
+      "unit": "pak",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_2",
+      "name": "Minyak Goreng Sania",
+      "qty": 48,
+      "unit": "pcs",
+      "price": 40000
+    },
+    {
+      "id": "stk_seed_3",
+      "name": "Tepung Segitiga",
+      "qty": 35,
+      "unit": "pak",
+      "price": 20000
+    },
+    {
+      "id": "stk_seed_4",
+      "name": "Garam Kapal",
+      "qty": 50,
+      "unit": "bungkus",
+      "price": 8000
+    },
+    {
+      "id": "stk_seed_5",
+      "name": "Mie Sedap Goreng",
+      "qty": 12,
+      "unit": "dus",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_6",
+      "name": "Telur Ayam",
+      "qty": 25,
+      "unit": "kg",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_7",
+      "name": "Kopi Kapal Api",
+      "qty": 20,
+      "unit": "renceng",
+      "price": 15000
+    },
+    {
+      "id": "stk_seed_8",
+      "name": "Teh Poci",
+      "qty": 15,
+      "unit": "pak",
+      "price": 12000
+    },
+    {
+      "id": "stk_seed_9",
+      "name": "Cutter Kenko",
+      "qty": 1,
+      "unit": "pcs",
+      "barcode": "8998838060018"
+    }
+  ],
+  "T002": [
+    {
+      "id": "stk_seed_0",
+      "name": "Beras Lahap",
+      "qty": 100,
+      "unit": "kg",
+      "price": 65000
+    },
+    {
+      "id": "stk_seed_1",
+      "name": "Gulaku",
+      "qty": 60,
+      "unit": "pak",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_2",
+      "name": "Minyak Goreng Sania",
+      "qty": 48,
+      "unit": "pcs",
+      "price": 40000
+    },
+    {
+      "id": "stk_seed_3",
+      "name": "Tepung Segitiga",
+      "qty": 35,
+      "unit": "pak",
+      "price": 20000
+    },
+    {
+      "id": "stk_seed_4",
+      "name": "Garam Kapal",
+      "qty": 50,
+      "unit": "bungkus",
+      "price": 8000
+    },
+    {
+      "id": "stk_seed_5",
+      "name": "Mie Sedap Goreng",
+      "qty": 12,
+      "unit": "dus",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_6",
+      "name": "Telur Ayam",
+      "qty": 25,
+      "unit": "kg",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_7",
+      "name": "Kopi Kapal Api",
+      "qty": 20,
+      "unit": "renceng",
+      "price": 15000
+    },
+    {
+      "id": "stk_seed_8",
+      "name": "Teh Poci",
+      "qty": 15,
+      "unit": "pak",
+      "price": 12000
+    },
+    {
+      "id": "stk_seed_9",
+      "name": "Cutter Kenko",
+      "qty": 1,
+      "unit": "pcs",
+      "barcode": "8998838060018"
+    }
+  ],
+  "T003": [
+    {
+      "id": "stk_seed_0",
+      "name": "Beras Lahap",
+      "qty": 100,
+      "unit": "kg",
+      "price": 65000
+    },
+    {
+      "id": "stk_seed_1",
+      "name": "Gulaku",
+      "qty": 60,
+      "unit": "pak",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_2",
+      "name": "Minyak Goreng Sania",
+      "qty": 48,
+      "unit": "pcs",
+      "price": 40000
+    },
+    {
+      "id": "stk_seed_3",
+      "name": "Tepung Segitiga",
+      "qty": 35,
+      "unit": "pak",
+      "price": 20000
+    },
+    {
+      "id": "stk_seed_4",
+      "name": "Garam Kapal",
+      "qty": 50,
+      "unit": "bungkus",
+      "price": 8000
+    },
+    {
+      "id": "stk_seed_5",
+      "name": "Mie Sedap Goreng",
+      "qty": 12,
+      "unit": "dus",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_6",
+      "name": "Telur Ayam",
+      "qty": 25,
+      "unit": "kg",
+      "price": 30000
+    },
+    {
+      "id": "stk_seed_7",
+      "name": "Kopi Kapal Api",
+      "qty": 20,
+      "unit": "renceng",
+      "price": 15000
+    },
+    {
+      "id": "stk_seed_8",
+      "name": "Teh Poci",
+      "qty": 15,
+      "unit": "pak",
+      "price": 12000
+    },
+    {
+      "id": "stk_seed_9",
+      "name": "Cutter Kenko",
+      "qty": 1,
+      "unit": "pcs",
+      "barcode": "8998838060018"
+    }
+  ]
+};
+// END STOCK_DATA
 
-const storageKey = () => KEY_PREFIX + TenantStore.getCurrent().id;
+let data = structuredClone(STOCK_DATA);
+let saveChain = Promise.resolve();
+const saveErrorHandlers = new Set();
+
+// Data stok versi lama tersimpan di Local Storage; sekarang tidak dipakai lagi.
+try {
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith(LEGACY_KEY_PREFIX))
+    .forEach((key) => localStorage.removeItem(key));
+} catch (e) { /* storage diblokir — tidak masalah */ }
 
 const newId = () => 'stk_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
 
-function write(items) {
-  try {
-    localStorage.setItem(storageKey(), JSON.stringify(items));
-    return true;
-  } catch (e) {
-    return false;
-  }
+function read() {
+  return data[TenantStore.getCurrent().id] || [];
 }
 
-function read() {
-  let raw = null;
+function commit(items) {
+  data = { ...data, [TenantStore.getCurrent().id]: items };
+  persist();
+}
+
+async function saveAll() {
+  let response;
   try {
-    raw = localStorage.getItem(storageKey());
-  } catch (e) { /* storage diblokir */ }
-
-  if (raw !== null) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    } catch (e) { /* data korup — seed ulang */ }
+    response = await fetch(SAVE_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  } catch (e) {
+    throw new Error('Server penyimpanan tidak terjangkau (offline?).');
   }
+  if (response.ok) return;
+  if (response.status === 404 || response.status === 405) {
+    throw new Error('Server penyimpanan belum aktif. Jalankan "node server.mjs", bukan http.server.');
+  }
+  throw new Error(`Server menolak data (kode ${response.status}).`);
+}
 
-  const seeded = SEED_ITEMS.map((item, i) => ({ id: 'stk_seed_' + i, ...item }));
-  write(seeded);
-  return seeded;
+// Simpan diserialkan; data terbaru dikirim tiap giliran sehingga simpan beruntun tidak saling menimpa.
+function persist() {
+  saveChain = saveChain
+    .then(saveAll)
+    .catch((err) => {
+      const message = `${err.message} Perubahan belum tersimpan ke js/stock.js dan hilang saat refresh.`;
+      saveErrorHandlers.forEach((handler) => handler(message));
+    });
 }
 
 // Mengembalikan { ok: true, value } atau { ok: false, error }
@@ -88,9 +318,13 @@ function validate(input, items, ignoreId) {
   return { ok: true, value: { name, qty, unit, barcode } };
 }
 
-const SAVE_FAILED = { success: false, error: 'Gagal menyimpan. Penyimpanan browser tidak tersedia.' };
-
 export const StockStore = {
+  // Dipanggil bila data gagal ditulis ke js/stock.js; mengembalikan fungsi untuk berhenti mendengarkan.
+  onSaveError(handler) {
+    saveErrorHandlers.add(handler);
+    return () => saveErrorHandlers.delete(handler);
+  },
+
   list() {
     return read().map(item => ({ ...item }));
   },
@@ -108,7 +342,7 @@ export const StockStore = {
     if (!checked.ok) return { success: false, error: checked.error };
 
     const item = { id: newId(), ...checked.value };
-    if (!write([...items, item])) return SAVE_FAILED;
+    commit([...items, item]);
     return { success: true, item };
   },
 
@@ -120,14 +354,14 @@ export const StockStore = {
     if (!checked.ok) return { success: false, error: checked.error };
 
     const next = items.map(i => (i.id === id ? { ...i, ...checked.value } : i));
-    if (!write(next)) return SAVE_FAILED;
+    commit(next);
     return { success: true, item: next.find(i => i.id === id) };
   },
 
   remove(id) {
     const items = read();
     if (!items.some(i => i.id === id)) return { success: false, error: 'Barang tidak ditemukan.' };
-    if (!write(items.filter(i => i.id !== id))) return SAVE_FAILED;
+    commit(items.filter(i => i.id !== id));
     return { success: true };
   },
 
@@ -145,7 +379,7 @@ export const StockStore = {
     }
 
     const next = items.map(i => (i.id === id ? { ...i, price } : i));
-    if (!write(next)) return SAVE_FAILED;
+    commit(next);
     return { success: true, item: next.find(i => i.id === id) };
   }
 };
