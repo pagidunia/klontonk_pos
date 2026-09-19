@@ -345,11 +345,6 @@ ul { list-style: none; }
   box-shadow: var(--shadow-focus);
 }
 
-/* Tombol tema: tampilkan bulan saat gelap, matahari saat terang */
-.theme-toggle .icon-moon { display: none; }
-[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
-[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
-
 /* === Bottom Navigation (pengganti drawer) === */
 .bottom-nav {
   position: fixed;
@@ -534,8 +529,21 @@ ul { list-style: none; }
   flex-direction: column;
   gap: 10px;
   margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(122, 94, 20, 0.35);
+}
+
+/* Garis pemisah di atas Logout (pseudo-element agar tidak ikut melengkung mengikuti sudut tombol) */
+.sheet-footer .sheet-item.danger {
+  position: relative;
+  margin-top: 6px;
+}
+.sheet-footer .sheet-item.danger::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(122, 94, 20, 0.35);
 }
 
 /* Item sheet: muncul berurutan (stagger) — slide halus ke atas */
