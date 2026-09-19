@@ -6,10 +6,17 @@ import { renderHome } from './pages/home.js';
 import { Auth } from './auth.js';
 import { renderLogin, initLoginPage } from './pages/login.js';
 import { renderUsersPage, initUsersPage } from './pages/users.js';
+import { renderStokAwalPage, initStokAwalPage } from './pages/stok-awal.js';
+import { renderHargaPage, initHargaPage } from './pages/update-harga.js';
+import { registerServiceWorker, watchConnectivity, isOnline, isOfflineReady, clearAppCache } from './pwa.js';
 
 // === Initialize core systems ===
 ThemeManager.init();
 TenantStore.init();
+
+// === PWA: service worker + pantau koneksi (aktif juga di halaman login) ===
+registerServiceWorker();
+watchConnectivity();
 
 // === Check Authentication — tampilkan login jika belum login ===
 // WAJIB menunggu inisialisasi auth selesai (verifikasi signature session
@@ -29,29 +36,9 @@ function initAuthenticatedApp() {
 
 try {
 
-// Update profile info dengan current user
+// Set tenant aktif sesuai user yang login
 const currentUser = Auth.getCurrentUser();
-if (currentUser) {
-  const profileNameEl = document.querySelector('.profile-name');
-  const profileRoleEl = document.querySelector('.profile-role');
-  const avatarEl = document.querySelector('.avatar');
-  if (profileNameEl) profileNameEl.textContent = currentUser.name;
-  if (profileRoleEl) profileRoleEl.textContent = currentUser.role === 'admin' ? 'Admin' : 'Kasir';
-  if (avatarEl) avatarEl.textContent = currentUser.avatar;
-
-  // Set tenant aktif sesuai user yang login
-  TenantStore.setCurrent(currentUser.tenant);
-}
-
-// === Service Worker dinonaktifkan sementara (development) ===
-// Cache-nya bikin perubahan file tidak langsung terlihat saat development.
-// Unregister semua SW yang mungkin sudah ter-install dari sesi sebelumnya.
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((regs) => {
-    regs.forEach((reg) => reg.unregister());
-  });
-  caches?.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
-}
+if (currentUser) TenantStore.setCurrent(currentUser.tenant);
 
 // === Versi Aplikasi ===
 const APP_VERSION = '1.1.0';
@@ -101,7 +88,7 @@ if (bottomNav) {
   const lainnyaTab = bottomNav.querySelector('[data-tab="lainnya"]');
   if (lainnyaTab) lainnyaTab.addEventListener('click', async () => {
     const items = [
-      { id: '/harga', label: 'Update Harga', desc: 'Ubah harga massal / per item', icon: SHEET_ICONS.dollar },
+      { id: '/harga', label: 'Update Harga', desc: 'Atur harga jual per barang', icon: SHEET_ICONS.dollar },
       { id: '/gudang', label: 'Gudang', desc: 'Inventori gudang pusat', icon: SHEET_ICONS.warehouse }
     ];
     if (currentIsAdmin()) {
@@ -199,16 +186,6 @@ function currentIsAdmin() {
   return !!(u && u.role === 'admin');
 }
 
-// Tampilkan nav "Tambah User" HANYA untuk admin
-(function setupAdminNav() {
-  const navAdmin = document.querySelectorAll('.nav-admin-only');
-  if (currentIsAdmin()) {
-    navAdmin.forEach(el => { el.hidden = false; });
-  } else {
-    navAdmin.forEach(el => { el.remove(); }); // hapus dari DOM — bukan sekadar disembunyikan
-  }
-})();
-
 // === Router Setup ===
 const router = new Router();
 
@@ -245,12 +222,12 @@ router
   .add('/kasir', () => placeholderPage('Transaksi', 'Layar transaksi kasir sedang dalam pengembangan.'))
   .add('/akun', () => { setTimeout(initAccountPage, 150); return accountPage(); })
   .add('/pengaturan', () => { setTimeout(initSettingsPage, 150); return settingsPage(); })
-  .add('/stok/awal', () => placeholderPage('Stok Awal', 'Input dan lihat stok awal periode.'))
+  .add('/stok/awal', () => { setTimeout(initStokAwalPage, 150); return renderStokAwalPage(); })
   .add('/stok/keluar-laku', () => placeholderPage('Stok Keluar — Laku', 'Laporan stok keluar akibat penjualan.'))
   .add('/stok/keluar-mutasi', () => placeholderPage('Stok Keluar — Mutasi', 'Laporan mutasi antar cabang/gudang.'))
   .add('/stok/retur', () => placeholderPage('Stok Retur', 'Proses dan laporan retur barang.'))
   .add('/stok/total', () => placeholderPage('Stok Total', 'Rekap stok keseluruhan semua SKU.'))
-  .add('/harga', () => placeholderPage('Update Harga', 'Ubah harga produk secara massal atau per item.'))
+  .add('/harga', () => { setTimeout(initHargaPage, 150); return renderHargaPage(); })
   .add('/laporan-kasir', () => placeholderPage('Laporan Kasir', 'Preview dan cetak laporan kasir harian.'))
   .add('/gudang', () => placeholderPage('Gudang', 'Manajemen inventori gudang pusat.'))
   .add('/users', adminGuard(renderUsersPage, initUsersPage))
@@ -380,10 +357,49 @@ function settingsPage() {
         <div class="account-row"><span>Versi Aplikasi</span><span class="version-tag">v${APP_VERSION} · Multi-Tenant</span></div>
       </div>
     </div>
+    <div class="activity-card" style="padding: 24px; margin-top: 16px;">
+      <h2 class="section-title" style="margin-bottom:12px;">Aplikasi &amp; Cache</h2>
+      <div class="account-rows" style="margin-bottom:16px;">
+        <div class="account-row"><span>Koneksi</span><span>${isOnline() ? 'Online' : 'Offline'}</span></div>
+        <div class="account-row"><span>Mode offline</span><span>${isOfflineReady() ? 'Siap' : 'Belum siap'}</span></div>
+      </div>
+      <p class="field-hint" style="margin-bottom:12px;">Hapus cache agar aplikasi tetap ringan. Data akun dan stok Anda tidak ikut terhapus.</p>
+      <button type="button" class="btn btn-secondary btn-large" id="clearCacheBtn">Bersihkan Cache</button>
+    </div>
   `;
 }
 
 function initSettingsPage() {
+  const clearBtn = document.getElementById('clearCacheBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', async () => {
+      // Tanpa koneksi, cache yang dihapus tidak bisa diisi ulang → aplikasi tak bisa dibuka lagi.
+      if (!isOnline()) {
+        UI.toast('Butuh koneksi internet untuk membersihkan cache.', { type: 'warning' });
+        return;
+      }
+      const confirmed = await UI.modal({
+        title: 'Bersihkan Cache',
+        message: 'Cache aplikasi akan dihapus lalu diunduh ulang. Data akun dan stok tidak terhapus. Lanjutkan?',
+        icon: 'warning',
+        confirmText: 'Ya, Bersihkan',
+        cancelText: 'Batal',
+        variant: 'primary'
+      });
+      if (!confirmed) return;
+
+      clearBtn.disabled = true;
+      const result = await clearAppCache();
+      if (result && result.ok) {
+        UI.toast('Cache dibersihkan. Memuat ulang…', { type: 'success' });
+        setTimeout(() => window.location.reload(), 800);
+      } else {
+        clearBtn.disabled = false;
+        UI.toast('Gagal membersihkan cache. Coba lagi.', { type: 'danger' });
+      }
+    });
+  }
+
   document.querySelectorAll('[data-theme-pick]').forEach(btn => {
     btn.addEventListener('click', () => {
       const pick = btn.dataset.themePick;
