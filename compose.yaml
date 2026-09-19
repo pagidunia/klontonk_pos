@@ -1,0 +1,14 @@
+# Jalankan:  podman compose up -d --build      Hentikan:  podman compose down
+services:
+  pos:
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: klontonk-pos
+    restart: always
+    ports:
+      # Hanya bisa diakses dari komputer ini; localhost dianggap aman oleh browser (kamera scan).
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Folder utuh (bukan satu file): server menulis stock.js lewat file sementara lalu rename.
+      - ./:/app

@@ -8,6 +8,7 @@ import { renderLogin, initLoginPage } from './pages/login.js';
 import { renderUsersPage, initUsersPage } from './pages/users.js';
 import { renderStokAwalPage, initStokAwalPage } from './pages/stok-awal.js';
 import { renderHargaPage, initHargaPage } from './pages/update-harga.js';
+import { StockStore } from './stock.js';
 import { registerServiceWorker, watchConnectivity, isOnline, isOfflineReady, clearAppCache } from './pwa.js';
 
 // === Initialize core systems ===
@@ -17,6 +18,9 @@ TenantStore.init();
 // === PWA: service worker + pantau koneksi (aktif juga di halaman login) ===
 registerServiceWorker();
 watchConnectivity();
+
+// === Gagal menulis stok/harga ke js/stock.js (mis. server.mjs belum jalan) ===
+StockStore.onSaveError((message) => UI.toast(message, { type: 'danger', duration: 9000 }));
 
 // === Check Authentication — tampilkan login jika belum login ===
 // WAJIB menunggu inisialisasi auth selesai (verifikasi signature session
