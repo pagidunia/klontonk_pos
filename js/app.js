@@ -119,11 +119,16 @@ if (accountBtn) {
         tenant: tenant ? tenant.name : ''
       },
       items: [
-        { id: 'akun', label: 'Informasi Akun', desc: '@' + user.username, icon: SHEET_ICONS.user },
-        { id: 'pengaturan', label: 'Pengaturan', desc: 'Tema & preferensi', icon: SHEET_ICONS.gear },
-        { id: 'versi', label: 'Versi Aplikasi', desc: 'v' + APP_VERSION + ' · Multi-Tenant', icon: SHEET_ICONS.info },
-        { id: 'logout', label: 'Logout', danger: true, icon: SHEET_ICONS.logout }
-      ]
+        { id: 'akun', label: 'Informasi Akun', desc: '@' + user.username, icon: SHEET_ICONS.user }
+      ],
+      // Terpin di bawah sheet, urutan dari atas: Pengaturan → Logout → Versi Aplikasi
+      footer: {
+        items: [
+          { id: 'pengaturan', label: 'Pengaturan', desc: 'Tema & preferensi', icon: SHEET_ICONS.gear },
+          { id: 'logout', label: 'Logout', danger: true, icon: SHEET_ICONS.logout },
+          { id: 'versi', label: 'Versi Aplikasi', desc: 'v' + APP_VERSION + ' · Multi-Tenant', icon: SHEET_ICONS.info }
+        ]
+      }
     });
     if (!sel) return;
     if (sel.id === 'akun') navigate('/akun');
@@ -156,15 +161,6 @@ function confirmLogout() {
 // (Navigasi drawer sidebar telah diganti Bottom Navigation + Bottom Sheet.
 //  Sub-menu Stok & menu sekunder kini dibuka lewat sheet pada tab Stok/Lainnya.
 //  Toggle mode terang/gelap dipindah ke halaman Pengaturan.)
-
-// === Theme Toggle ===
-const themeToggle = document.getElementById('themeToggle');
-if (themeToggle) {
-  themeToggle.addEventListener('click', () => {
-    const next = ThemeManager.toggle();
-    UI.toast(`Mode ${next === 'dark' ? 'gelap' : 'terang'} aktif`, { type: 'success' });
-  });
-}
 
 // === Tenant Display (Read-only) ===
 // GUARD: elemen tenant hanya ada di header — jangan referensi elemen drawer
