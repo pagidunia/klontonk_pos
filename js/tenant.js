@@ -46,17 +46,5 @@ export const TenantStore = {
   subscribe(fn) {
     this._listeners.add(fn);
     return () => this._listeners.delete(fn);
-  },
-  
-  /**
-   * Siap untuk API integration.
-   * Contoh: fetch('/api/stock', { headers: { 'X-Tenant-Id': this.getApiContext().tenantId }})
-   */
-  getApiContext() {
-    return {
-      tenantId: this._current.id,
-      tenantCode: this._current.code,
-      tenantName: this._current.name
-    };
   }
 };
