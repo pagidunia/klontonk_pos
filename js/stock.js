@@ -86,7 +86,8 @@ const STOCK_DATA = {
       "name": "Cutter Kenko",
       "qty": 1,
       "unit": "pcs",
-      "barcode": "8998838060018"
+      "barcode": "8998838060018",
+      "price": 15000
     }
   ],
   "T002": [
