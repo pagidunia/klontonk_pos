@@ -1,46 +1,9 @@
-// Service worker Klontonk POS.
-//
-// Strategi: NETWORK-FIRST. Saat online selalu ambil versi terbaru, cache hanya
-// dipakai sebagai cadangan saat offline. (Strategi cache-first sebelumnya bikin
-// perubahan file tidak muncul.)
-//
-// Pengaman cache (agar aplikasi tidak berat / tidak "nyangkut" versi lama):
-//   1. Cache versi lama otomatis dihapus saat CACHE_NAME dinaikkan.
-//   2. Cache runtime dibatasi MAX_ENTRIES; entri terlama dibuang.
-//   3. Pesan { type: 'CLEAR_CACHE' } dari halaman → hapus semua cache lalu isi ulang.
-//   4. Darurat (bila aplikasi rusak dan menu Pengaturan tak bisa dibuka):
-//      buka  <alamat-app>/index.html?reset-cache=1
-
-const CACHE_NAME = 'klontonk-pos-v3';
-const MAX_ENTRIES = 60;
-const NETWORK_TIMEOUT_MS = 5000;
-const RESET_PARAM = 'reset-cache';
-
-// App shell untuk offline. Tambahkan file baru di sini; file yang terlewat
-// tetap masuk cache saat pertama kali dimuat online.
-const PRECACHE = [
-  './',
-  './index.html',
-  './manifest.json',
-  './css/styles.css',
-  './assets/fonts/plus-jakarta-sans-latin.woff2',
-  './assets/icons/icon-192.png',
-  './assets/icons/icon-512.png',
-  './assets/vendor/zxing/zxing.min.js',
-  './js/app.js',
-  './js/auth.js',
-  './js/pwa.js',
-  './js/router.js',
-  './js/scanner.js',
-  './js/stock.js',
-  './js/tenant.js',
-  './js/theme.js',
-  './js/ui.js',
-  './js/pages/home.js',
-  './js/pages/login.js',
-  './js/pages/stok-awal.js',
-  './js/pages/update-harga.js',
-  './js/pages/users.js'
+const CACHE_NAME = 'klontonk-pos-v1';
+const STATIC_ASSETS = [
+  '/',
+  '/index.html',
+  '/css/styles.css',
+  '/manifest.json'
 ];
 
 const PROTECTED_PATHS = new Set(PRECACHE.map((path) => new URL(path, self.location).pathname));

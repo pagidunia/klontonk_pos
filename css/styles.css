@@ -106,7 +106,10 @@ html {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
+<<<<<<< HEAD
   overscroll-behavior: none; /* anti rubber-band saat scroll mentok atas/bawah */
+=======
+>>>>>>> ba7a59e003fc644306d708301d667dad2cc8223e
   background: var(--bg-surface-2); /* area di luar kolom aplikasi pada layar lebar */
 }
 
@@ -712,7 +715,10 @@ ul { list-style: none; }
 .app-main {
   flex: 1;
   padding: var(--space-4);
+<<<<<<< HEAD
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); /* ruang bottom nav */
+=======
+>>>>>>> ba7a59e003fc644306d708301d667dad2cc8223e
   width: 100%;
   margin: 0 auto;
   overscroll-behavior-y: none; /* konten halaman tidak rubber */
@@ -2056,6 +2062,49 @@ ul { list-style: none; }
   background: linear-gradient(135deg, #003D73 0%, #001F3F 100%);
 }
 
+<<<<<<< HEAD
+=======
+/* === Logout Button â€” solid danger untuk kontras maksimal === */
+.logout-btn {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger);
+  color: #FFFFFF;
+  border: 1px solid #B91C1C;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  margin-bottom: var(--space-3);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.28);
+}
+
+.logout-btn:hover {
+  background: #B91C1C;
+  border-color: #991B1B;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+  transform: translateY(-1px);
+}
+
+.logout-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(220, 38, 38, 0.3);
+}
+
+.logout-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35);
+}
+
+/* Tata letak selalu mobile (1 kolom, lebar maks --app-width): tidak ada breakpoint desktop. */
+
+>>>>>>> ba7a59e003fc644306d708301d667dad2cc8223e
 /* === Accessibility === */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
