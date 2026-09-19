@@ -4,7 +4,11 @@ import { TenantStore } from './tenant.js';
 // halaman hanya lapisan tampilan.
 const KEY_PREFIX = 'klontonk:stok-awal:';
 const MAX_QTY = 1000000;
+export const MAX_PRICE = 100000000;
 const NAME_PATTERN = /^[\p{L}\p{N} .,'()&/+-]{2,60}$/u;
+export const BARCODE_PATTERN = /^[A-Za-z0-9._-]{4,40}$/;
+
+const sameBarcode = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 
 export const UNITS = ['pcs', 'kg', 'liter', 'pak', 'bungkus', 'dus', 'karung', 'renceng'];
 
@@ -73,7 +77,15 @@ function validate(input, items, ignoreId) {
   const duplicate = items.some(i => i.id !== ignoreId && i.name.toLowerCase() === name.toLowerCase());
   if (duplicate) return { ok: false, error: 'Barang dengan nama itu sudah ada.' };
 
-  return { ok: true, value: { name, qty, unit } };
+  // Barcode opsional; bila diisi harus unik per tenant.
+  const barcode = String((input && input.barcode) ?? '').trim();
+  if (barcode && !BARCODE_PATTERN.test(barcode)) {
+    return { ok: false, error: 'Barcode 4–40 karakter (huruf, angka, titik, minus, underscore).' };
+  }
+  const barcodeOwner = barcode ? items.find(i => i.id !== ignoreId && i.barcode && sameBarcode(i.barcode, barcode)) : null;
+  if (barcodeOwner) return { ok: false, error: `Barcode sudah dipakai oleh "${barcodeOwner.name}".` };
+
+  return { ok: true, value: { name, qty, unit, barcode } };
 }
 
 const SAVE_FAILED = { success: false, error: 'Gagal menyimpan. Penyimpanan browser tidak tersedia.' };
@@ -81,6 +93,13 @@ const SAVE_FAILED = { success: false, error: 'Gagal menyimpan. Penyimpanan brows
 export const StockStore = {
   list() {
     return read().map(item => ({ ...item }));
+  },
+
+  findByBarcode(code) {
+    const text = String(code || '').trim();
+    if (!text) return null;
+    const found = read().find(i => i.barcode && sameBarcode(i.barcode, text));
+    return found ? { ...found } : null;
   },
 
   add(input) {
@@ -110,5 +129,23 @@ export const StockStore = {
     if (!items.some(i => i.id === id)) return { success: false, error: 'Barang tidak ditemukan.' };
     if (!write(items.filter(i => i.id !== id))) return SAVE_FAILED;
     return { success: true };
+  },
+
+  // Harga jual per barang (rupiah, bilangan bulat).
+  setPrice(id, rawPrice) {
+    const items = read();
+    if (!items.some(i => i.id === id)) return { success: false, error: 'Barang tidak ditemukan.' };
+
+    const text = String(rawPrice ?? '').trim();
+    if (text === '') return { success: false, error: 'Harga wajib diisi.' };
+
+    const price = Number(text);
+    if (!Number.isInteger(price) || price < 1 || price > MAX_PRICE) {
+      return { success: false, error: 'Harga harus bilangan bulat Rp 1 – Rp 100.000.000.' };
+    }
+
+    const next = items.map(i => (i.id === id ? { ...i, price } : i));
+    if (!write(next)) return SAVE_FAILED;
+    return { success: true, item: next.find(i => i.id === id) };
   }
 };

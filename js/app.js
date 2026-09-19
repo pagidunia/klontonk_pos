@@ -7,6 +7,7 @@ import { Auth } from './auth.js';
 import { renderLogin, initLoginPage } from './pages/login.js';
 import { renderUsersPage, initUsersPage } from './pages/users.js';
 import { renderStokAwalPage, initStokAwalPage } from './pages/stok-awal.js';
+import { renderHargaPage, initHargaPage } from './pages/update-harga.js';
 import { registerServiceWorker, watchConnectivity, isOnline, isOfflineReady, clearAppCache } from './pwa.js';
 
 // === Initialize core systems ===
@@ -87,7 +88,7 @@ if (bottomNav) {
   const lainnyaTab = bottomNav.querySelector('[data-tab="lainnya"]');
   if (lainnyaTab) lainnyaTab.addEventListener('click', async () => {
     const items = [
-      { id: '/harga', label: 'Update Harga', desc: 'Ubah harga massal / per item', icon: SHEET_ICONS.dollar },
+      { id: '/harga', label: 'Update Harga', desc: 'Atur harga jual per barang', icon: SHEET_ICONS.dollar },
       { id: '/gudang', label: 'Gudang', desc: 'Inventori gudang pusat', icon: SHEET_ICONS.warehouse }
     ];
     if (currentIsAdmin()) {
@@ -226,7 +227,7 @@ router
   .add('/stok/keluar-mutasi', () => placeholderPage('Stok Keluar — Mutasi', 'Laporan mutasi antar cabang/gudang.'))
   .add('/stok/retur', () => placeholderPage('Stok Retur', 'Proses dan laporan retur barang.'))
   .add('/stok/total', () => placeholderPage('Stok Total', 'Rekap stok keseluruhan semua SKU.'))
-  .add('/harga', () => placeholderPage('Update Harga', 'Ubah harga produk secara massal atau per item.'))
+  .add('/harga', () => { setTimeout(initHargaPage, 150); return renderHargaPage(); })
   .add('/laporan-kasir', () => placeholderPage('Laporan Kasir', 'Preview dan cetak laporan kasir harian.'))
   .add('/gudang', () => placeholderPage('Gudang', 'Manajemen inventori gudang pusat.'))
   .add('/users', adminGuard(renderUsersPage, initUsersPage))

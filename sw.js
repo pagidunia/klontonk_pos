@@ -26,10 +26,12 @@ const PRECACHE = [
   './assets/fonts/plus-jakarta-sans-latin.woff2',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
+  './assets/vendor/zxing/zxing.min.js',
   './js/app.js',
   './js/auth.js',
   './js/pwa.js',
   './js/router.js',
+  './js/scanner.js',
   './js/stock.js',
   './js/tenant.js',
   './js/theme.js',
@@ -37,6 +39,7 @@ const PRECACHE = [
   './js/pages/home.js',
   './js/pages/login.js',
   './js/pages/stok-awal.js',
+  './js/pages/update-harga.js',
   './js/pages/users.js'
 ];
 
@@ -67,7 +70,8 @@ async function trimCache(cache) {
 function fetchWithTimeout(request) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
-  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timer));
+  // 'no-cache' = selalu tanya server (304 bila tak berubah), agar tidak memakai cache HTTP yang basi.
+  return fetch(request, { signal: controller.signal, cache: 'no-cache' }).finally(() => clearTimeout(timer));
 }
 
 async function networkFirst(event) {
