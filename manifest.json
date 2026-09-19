@@ -1,12 +1,14 @@
 {
+  "id": "klontonk-pos",
   "name": "Klontonk POS",
   "short_name": "Klontonk",
   "description": "Sistem Point of Sales modern untuk bisnis multi-cabang",
-  "start_url": "/",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#EBE4DB",
-  "theme_color": "#0060AF",
+  "theme_color": "#FFFFFF",
   "lang": "id",
   "version": "1.1.0",
   "categories": ["business", "productivity"],
@@ -15,27 +17,38 @@
       "src": "assets/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "assets/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "screenshots": [],
   "shortcuts": [
     {
       "name": "Menu Kasir",
       "short_name": "Kasir",
-      "url": "#/kasir",
+      "url": "./index.html#/kasir",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Stok Total",
       "short_name": "Stok",
-      "url": "#/stok/total",
+      "url": "./index.html#/stok/total",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]

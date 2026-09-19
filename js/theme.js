@@ -19,19 +19,8 @@ export const ThemeManager = {
     document.documentElement.setAttribute('data-theme', theme);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', theme === 'dark' ? '#0A1628' : '#EBE4DB');
+      // Sama dengan warna header (--bg-surface) agar status bar menyatu.
+      meta.setAttribute('content', theme === 'dark' ? '#121E33' : '#FFFFFF');
     }
-  },
-  
-  toggle() {
-    const current = document.documentElement.getAttribute('data-theme');
-    const next = current === 'dark' ? 'light' : 'dark';
-    this.apply(next);
-    localStorage.setItem(this._key, next);
-    return next;
-  },
-  
-  current() {
-    return document.documentElement.getAttribute('data-theme');
   }
 };

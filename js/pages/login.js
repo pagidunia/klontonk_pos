@@ -105,6 +105,8 @@ export function initLoginPage() {
 
       if (result.success) {
         UI.toast(`Selamat datang, ${result.user.name}!`, { type: 'success' });
+        // WAJIB: setelah login selalu diarahkan ke halaman Beranda
+        window.location.hash = '#/beranda';
         setTimeout(() => {
           window.location.reload();
         }, 300);

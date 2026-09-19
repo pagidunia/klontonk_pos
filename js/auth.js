@@ -124,7 +124,6 @@ function _storageRemove(key) {
 class AuthManager {
   constructor() {
     this.currentUser = null;
-    this.callbacks = [];
     this.updateActivityBound = this.updateActivity.bind(this);
     this.timeoutInterval = null;
     this._seeding = null; // promise cache agar seeding hanya jalan sekali
@@ -410,7 +409,6 @@ class AuthManager {
     this.setupActivityListeners();
     this.startTimeoutCheck();
 
-    this.notifySubscribers();
     return { success: true, user: this.currentUser };
   }
 
@@ -543,7 +541,6 @@ class AuthManager {
       clearInterval(this.timeoutInterval);
     }
     this.removeActivityListeners();
-    this.notifySubscribers();
   }
 
   // Check apakah user sudah login
@@ -559,18 +556,6 @@ class AuthManager {
   // Role helpers — dipakai untuk guard UI & routing
   isAdmin() {
     return this.currentUser !== null && this.currentUser.role === 'admin';
-  }
-
-  // Subscribe ke perubahan auth state
-  subscribe(callback) {
-    this.callbacks.push(callback);
-    return () => {
-      this.callbacks = this.callbacks.filter(cb => cb !== callback);
-    };
-  }
-
-  notifySubscribers() {
-    this.callbacks.forEach(cb => cb(this.currentUser));
   }
 }
 

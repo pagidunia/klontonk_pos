@@ -174,9 +174,14 @@ export const UI = {
    * Bottom Sheet — menu pilihan slide-up dari bawah layar
    * items: [{ id, label, desc?, icon? (svg string), danger? }]
    * profile: { avatar, name, role, tenant } — header opsional
-   * resolve(item) saat item dipilih, resolve(null) saat ditutup (backdrop/Escape)
+   * footer: blok terpin di bawah sheet (dipakai oleh side-left), urutan dari
+   *         BAWAH: version → cta → items. Struktur:
+   *   - items:   [{ id, label, desc?, icon?, danger? }] — menu bergaya sheet-item
+   *   - cta:     { id, label, icon?, danger? } — tombol besar ala tombol login
+   *   - version: string — teks kecil, non-interaktif (tidak dapat diklik)
+   * resolve(item) saat item/cta dipilih, resolve(null) saat ditutup (backdrop/Escape)
    */
-  sheet({ title = '', profile = null, items = [], side = 'up' } = {}) {
+  sheet({ title = '', profile = null, items = [], side = 'up', footer = null } = {}) {
     return new Promise((resolve) => {
       const root = document.getElementById('sheetRoot');
       if (!root) { resolve(null); return; }
@@ -190,7 +195,7 @@ export const UI = {
       panel.setAttribute('role', 'dialog');
       panel.setAttribute('aria-modal', 'true');
 
-      const itemsHtml = items.map((it, i) => `
+      const itemHtml = (it, i) => `
         <button class="sheet-item ${it.danger ? 'danger' : ''}" data-index="${i}" style="--i:${i}">
           ${it.icon ? `<span class="sheet-item-icon">${it.icon}</span>` : ''}
           <span class="sheet-item-text">
@@ -198,7 +203,28 @@ export const UI = {
             ${it.desc ? `<span class="sheet-item-desc">${this._escape(it.desc)}</span>` : ''}
           </span>
         </button>
-      `).join('');
+      `;
+
+      const itemsHtml = items.map((it, i) => itemHtml(it, i)).join('');
+
+      // Footer sheet: item menu → tombol CTA → versi aplikasi (paling bawah)
+      const footerItems = (footer && footer.items) || [];
+      const footerCta = (footer && footer.cta) || null;
+      const footerVersion = (footer && footer.version) || null;
+      const ctaIndex = items.length + footerItems.length;
+      const allItems = items.concat(footerItems, footerCta ? [footerCta] : []);
+
+      const footerHtml = footer ? `
+        <div class="sheet-footer">
+          ${footerItems.map((it, i) => itemHtml(it, items.length + i)).join('')}
+          ${footerCta ? `
+          <button class="sheet-cta ${footerCta.danger ? 'danger' : ''}" data-index="${ctaIndex}" style="--i:${ctaIndex}">
+            ${footerCta.icon ? `<span class="sheet-cta-icon">${footerCta.icon}</span>` : ''}
+            <span>${this._escape(footerCta.label)}</span>
+          </button>` : ''}
+          ${footerVersion ? `<p class="sheet-version">${this._escape(footerVersion)}</p>` : ''}
+        </div>
+      ` : '';
 
       panel.innerHTML = `
         <div class="sheet-handle" aria-hidden="true"></div>
@@ -212,6 +238,7 @@ export const UI = {
         </div>` : ''}
         ${title ? `<p class="sheet-title">${this._escape(title)}</p>` : ''}
         <div class="sheet-items">${itemsHtml}</div>
+        ${footerHtml}
       `;
 
       root.appendChild(backdrop);
@@ -230,8 +257,8 @@ export const UI = {
         resolve(value);
       };
 
-      panel.querySelectorAll('.sheet-item').forEach(btn => {
-        btn.addEventListener('click', () => close(items[Number(btn.dataset.index)]));
+      panel.querySelectorAll('[data-index]').forEach(btn => {
+        btn.addEventListener('click', () => close(allItems[Number(btn.dataset.index)]));
       });
       backdrop.addEventListener('click', () => close(null));
 

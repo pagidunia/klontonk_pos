@@ -20,10 +20,6 @@ export class Router {
     this._resolve();
   }
   
-  navigate(path) {
-    window.location.hash = path;
-  }
-  
   _resolve() {
     const hash = window.location.hash.slice(1) || '/beranda';
     const handler = this.routes.get(hash) || this._notFound;

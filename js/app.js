@@ -6,10 +6,21 @@ import { renderHome } from './pages/home.js';
 import { Auth } from './auth.js';
 import { renderLogin, initLoginPage } from './pages/login.js';
 import { renderUsersPage, initUsersPage } from './pages/users.js';
+import { renderStokAwalPage, initStokAwalPage } from './pages/stok-awal.js';
+import { renderHargaPage, initHargaPage } from './pages/update-harga.js';
+import { StockStore } from './stock.js';
+import { registerServiceWorker, watchConnectivity, isOnline, isOfflineReady, clearAppCache } from './pwa.js';
 
 // === Initialize core systems ===
 ThemeManager.init();
 TenantStore.init();
+
+// === PWA: service worker + pantau koneksi (aktif juga di halaman login) ===
+registerServiceWorker();
+watchConnectivity();
+
+// === Gagal menulis stok/harga ke js/stock.js (mis. server.mjs belum jalan) ===
+StockStore.onSaveError((message) => UI.toast(message, { type: 'danger', duration: 9000 }));
 
 // === Check Authentication — tampilkan login jika belum login ===
 // WAJIB menunggu inisialisasi auth selesai (verifikasi signature session
@@ -29,32 +40,12 @@ function initAuthenticatedApp() {
 
 try {
 
-// Update profile info dengan current user
+// Set tenant aktif sesuai user yang login
 const currentUser = Auth.getCurrentUser();
-if (currentUser) {
-  const profileNameEl = document.querySelector('.profile-name');
-  const profileRoleEl = document.querySelector('.profile-role');
-  const avatarEl = document.querySelector('.avatar');
-  if (profileNameEl) profileNameEl.textContent = currentUser.name;
-  if (profileRoleEl) profileRoleEl.textContent = currentUser.role === 'admin' ? 'Admin' : 'Kasir';
-  if (avatarEl) avatarEl.textContent = currentUser.avatar;
-
-  // Set tenant aktif sesuai user yang login
-  TenantStore.setCurrent(currentUser.tenant);
-}
-
-// === Service Worker dinonaktifkan sementara (development) ===
-// Cache-nya bikin perubahan file tidak langsung terlihat saat development.
-// Unregister semua SW yang mungkin sudah ter-install dari sesi sebelumnya.
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((regs) => {
-    regs.forEach((reg) => reg.unregister());
-  });
-  caches?.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
-}
+if (currentUser) TenantStore.setCurrent(currentUser.tenant);
 
 // === Versi Aplikasi ===
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 // === Ikon untuk Bottom Sheet ===
 const SHEET_ICONS = {
@@ -64,7 +55,6 @@ const SHEET_ICONS = {
   userPlus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>',
   user: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
   gear: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
-  info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
   logout: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>'
 };
 
@@ -101,7 +91,7 @@ if (bottomNav) {
   const lainnyaTab = bottomNav.querySelector('[data-tab="lainnya"]');
   if (lainnyaTab) lainnyaTab.addEventListener('click', async () => {
     const items = [
-      { id: '/harga', label: 'Update Harga', desc: 'Ubah harga massal / per item', icon: SHEET_ICONS.dollar },
+      { id: '/harga', label: 'Update Harga', desc: 'Atur harga jual per barang', icon: SHEET_ICONS.dollar },
       { id: '/gudang', label: 'Gudang', desc: 'Inventori gudang pusat', icon: SHEET_ICONS.warehouse }
     ];
     if (currentIsAdmin()) {
@@ -128,21 +118,26 @@ if (accountBtn) {
         tenant: tenant ? tenant.name : ''
       },
       items: [
-        { id: 'akun', label: 'Informasi Akun', desc: '@' + user.username, icon: SHEET_ICONS.user },
-        { id: 'pengaturan', label: 'Pengaturan', desc: 'Tema & preferensi', icon: SHEET_ICONS.gear },
-        { id: 'versi', label: 'Versi Aplikasi', desc: 'v' + APP_VERSION + ' · Multi-Tenant', icon: SHEET_ICONS.info },
-        { id: 'logout', label: 'Logout', danger: true, icon: SHEET_ICONS.logout }
-      ]
+        { id: 'akun', label: 'Informasi Akun', desc: '@' + user.username, icon: SHEET_ICONS.user }
+      ],
+      // Footer terpin di bawah sheet — urutan dari BAWAH:
+      // versi aplikasi (teks kecil, non-interaktif) → tombol logout → pengaturan
+      footer: {
+        items: [
+          { id: 'pengaturan', label: 'Pengaturan', desc: 'Tema & preferensi', icon: SHEET_ICONS.gear }
+        ],
+        cta: { id: 'logout', label: 'Logout', danger: true, icon: SHEET_ICONS.logout },
+        version: 'Klontonk POS v' + APP_VERSION + ' · Multi-Tenant'
+      }
     });
     if (!sel) return;
     if (sel.id === 'akun') navigate('/akun');
     else if (sel.id === 'pengaturan') navigate('/pengaturan');
-    else if (sel.id === 'versi') UI.toast('Klontonk POS v' + APP_VERSION, { type: 'info' });
     else if (sel.id === 'logout') confirmLogout();
   });
 }
 
-// === Logout (konfirmasi) — dipakai sheet akun & halaman Informasi Akun ===
+// === Logout (konfirmasi) — dipakai footer sheet akun ===
 function confirmLogout() {
   UI.modal({
     title: 'Konfirmasi Keluar',
@@ -163,13 +158,8 @@ function confirmLogout() {
 }
 
 // (Navigasi drawer sidebar telah diganti Bottom Navigation + Bottom Sheet.
-//  Sub-menu Stok & menu sekunder kini dibuka lewat sheet pada tab Stok/Lainnya.)
-
-// === Theme Toggle ===
-document.getElementById('themeToggle').addEventListener('click', () => {
-  const next = ThemeManager.toggle();
-  UI.toast(`Mode ${next === 'dark' ? 'gelap' : 'terang'} aktif`, { type: 'success' });
-});
+//  Sub-menu Stok & menu sekunder kini dibuka lewat sheet pada tab Stok/Lainnya.
+//  Toggle mode terang/gelap dipindah ke halaman Pengaturan.)
 
 // === Tenant Display (Read-only) ===
 // GUARD: elemen tenant hanya ada di header — jangan referensi elemen drawer
@@ -198,16 +188,6 @@ function currentIsAdmin() {
   const u = Auth.getCurrentUser();
   return !!(u && u.role === 'admin');
 }
-
-// Tampilkan nav "Tambah User" HANYA untuk admin
-(function setupAdminNav() {
-  const navAdmin = document.querySelectorAll('.nav-admin-only');
-  if (currentIsAdmin()) {
-    navAdmin.forEach(el => { el.hidden = false; });
-  } else {
-    navAdmin.forEach(el => { el.remove(); }); // hapus dari DOM — bukan sekadar disembunyikan
-  }
-})();
 
 // === Router Setup ===
 const router = new Router();
@@ -243,14 +223,14 @@ const adminGuard = (renderFn, initFn) => () => {
 router
   .add('/beranda', renderHome)
   .add('/kasir', () => placeholderPage('Transaksi', 'Layar transaksi kasir sedang dalam pengembangan.'))
-  .add('/akun', () => { setTimeout(initAccountPage, 150); return accountPage(); })
+  .add('/akun', accountPage)
   .add('/pengaturan', () => { setTimeout(initSettingsPage, 150); return settingsPage(); })
-  .add('/stok/awal', () => placeholderPage('Stok Awal', 'Input dan lihat stok awal periode.'))
+  .add('/stok/awal', () => { setTimeout(initStokAwalPage, 150); return renderStokAwalPage(); })
   .add('/stok/keluar-laku', () => placeholderPage('Stok Keluar — Laku', 'Laporan stok keluar akibat penjualan.'))
   .add('/stok/keluar-mutasi', () => placeholderPage('Stok Keluar — Mutasi', 'Laporan mutasi antar cabang/gudang.'))
   .add('/stok/retur', () => placeholderPage('Stok Retur', 'Proses dan laporan retur barang.'))
   .add('/stok/total', () => placeholderPage('Stok Total', 'Rekap stok keseluruhan semua SKU.'))
-  .add('/harga', () => placeholderPage('Update Harga', 'Ubah harga produk secara massal atau per item.'))
+  .add('/harga', () => { setTimeout(initHargaPage, 150); return renderHargaPage(); })
   .add('/laporan-kasir', () => placeholderPage('Laporan Kasir', 'Preview dan cetak laporan kasir harian.'))
   .add('/gudang', () => placeholderPage('Gudang', 'Manajemen inventori gudang pusat.'))
   .add('/users', adminGuard(renderUsersPage, initUsersPage))
@@ -315,6 +295,7 @@ function showWelcomePopup() {
 }
 
 // === Halaman Informasi Akun ===
+// Logout & versi aplikasi kini hanya di sheet akun (bukan di halaman ini).
 function accountPage() {
   const user = Auth.getCurrentUser() || {};
   const tenant = TenantStore.getCurrent() || {};
@@ -334,23 +315,13 @@ function accountPage() {
           <p class="profile-role">${UI._escape(roleLabel)} · @${UI._escape(user.username || '-')}</p>
         </div>
       </div>
-      <div class="account-rows">
+      <div class="account-rows" style="margin-bottom:0;">
         <div class="account-row"><span>Role</span><span class="role-badge ${user.role === 'admin' ? 'role-admin' : 'role-cashier'}">${UI._escape(roleLabel)}</span></div>
         <div class="account-row"><span>Tenant</span><span>${UI._escape(tenant.name || '-')}</span></div>
-        <div class="account-row"><span>Login terakhir</span><span>${UI._escape(loginAt)}</span></div>
-        <div class="account-row"><span>Versi Aplikasi</span><span class="version-tag">v${APP_VERSION}</span></div>
+        <div class="account-row" style="border-bottom:none;"><span>Login terakhir</span><span>${UI._escape(loginAt)}</span></div>
       </div>
-      <button class="logout-btn" id="accountLogoutBtn" style="margin-bottom:0;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-        <span>Logout</span>
-      </button>
     </div>
   `;
-}
-
-function initAccountPage() {
-  const btn = document.getElementById('accountLogoutBtn');
-  if (btn) btn.addEventListener('click', confirmLogout);
 }
 
 // === Halaman Pengaturan ===
@@ -376,21 +347,58 @@ function settingsPage() {
         </button>
       </div>
       <div class="account-rows" style="margin-top:16px; margin-bottom:0;">
-        <div class="account-row"><span>Tenant aktif</span><span>${UI._escape(tenant.name || '-')}</span></div>
-        <div class="account-row"><span>Versi Aplikasi</span><span class="version-tag">v${APP_VERSION} · Multi-Tenant</span></div>
+        <div class="account-row" style="border-bottom:none;"><span>Tenant aktif</span><span>${UI._escape(tenant.name || '-')}</span></div>
       </div>
+    </div>
+    <div class="activity-card" style="padding: 24px; margin-top: 16px;">
+      <h2 class="section-title" style="margin-bottom:12px;">Aplikasi &amp; Cache</h2>
+      <div class="account-rows" style="margin-bottom:16px;">
+        <div class="account-row"><span>Koneksi</span><span>${isOnline() ? 'Online' : 'Offline'}</span></div>
+        <div class="account-row"><span>Mode offline</span><span>${isOfflineReady() ? 'Siap' : 'Belum siap'}</span></div>
+      </div>
+      <p class="field-hint" style="margin-bottom:12px;">Hapus cache agar aplikasi tetap ringan. Data akun dan stok Anda tidak ikut terhapus.</p>
+      <button type="button" class="btn btn-secondary btn-large" id="clearCacheBtn">Bersihkan Cache</button>
     </div>
   `;
 }
 
 function initSettingsPage() {
+  const clearBtn = document.getElementById('clearCacheBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', async () => {
+      // Tanpa koneksi, cache yang dihapus tidak bisa diisi ulang → aplikasi tak bisa dibuka lagi.
+      if (!isOnline()) {
+        UI.toast('Butuh koneksi internet untuk membersihkan cache.', { type: 'warning' });
+        return;
+      }
+      const confirmed = await UI.modal({
+        title: 'Bersihkan Cache',
+        message: 'Cache aplikasi akan dihapus lalu diunduh ulang. Data akun dan stok tidak terhapus. Lanjutkan?',
+        icon: 'warning',
+        confirmText: 'Ya, Bersihkan',
+        cancelText: 'Batal',
+        variant: 'primary'
+      });
+      if (!confirmed) return;
+
+      clearBtn.disabled = true;
+      const result = await clearAppCache();
+      if (result && result.ok) {
+        UI.toast('Cache dibersihkan. Memuat ulang…', { type: 'success' });
+        setTimeout(() => window.location.reload(), 800);
+      } else {
+        clearBtn.disabled = false;
+        UI.toast('Gagal membersihkan cache. Coba lagi.', { type: 'danger' });
+      }
+    });
+  }
+
   document.querySelectorAll('[data-theme-pick]').forEach(btn => {
     btn.addEventListener('click', () => {
       const pick = btn.dataset.themePick;
       ThemeManager.apply(pick);
       try { localStorage.setItem('klontonk:theme', pick); } catch (e) { /* abaikan */ }
       document.querySelectorAll('[data-theme-pick]').forEach(b => b.classList.toggle('active', b.dataset.themePick === pick));
-      UI.toast('Mode ' + (pick === 'dark' ? 'gelap' : 'terang') + ' aktif', { type: 'success' });
     });
   });
 }
