@@ -8,6 +8,9 @@ import { renderLogin, initLoginPage } from './pages/login.js';
 import { renderUsersPage, initUsersPage } from './pages/users.js';
 import { renderStokAwalPage, initStokAwalPage } from './pages/stok-awal.js';
 import { renderHargaPage, initHargaPage } from './pages/update-harga.js';
+import { renderTransaksiPage, initTransaksiPage } from './pages/transaksi.js';
+import { renderStokKeluarPage, initStokKeluarPage } from './pages/stok-keluar.js';
+import { SalesStore } from './sales.js';
 import { StockStore } from './stock.js';
 import { registerServiceWorker, watchConnectivity, isOnline, isOfflineReady, clearAppCache } from './pwa.js';
 
@@ -21,6 +24,7 @@ watchConnectivity();
 
 // === Gagal menulis stok/harga ke js/stock.js (mis. server.mjs belum jalan) ===
 StockStore.onSaveError((message) => UI.toast(message, { type: 'danger', duration: 9000 }));
+SalesStore.onSaveError((message) => UI.toast(message, { type: 'danger', duration: 9000 }));
 
 // === Check Authentication — tampilkan login jika belum login ===
 // WAJIB menunggu inisialisasi auth selesai (verifikasi signature session
@@ -223,11 +227,11 @@ const adminGuard = (renderFn, initFn) => () => {
 
 router
   .add('/beranda', renderHome)
-  .add('/kasir', () => placeholderPage('Transaksi', 'Layar transaksi kasir sedang dalam pengembangan.'))
+  .add('/kasir', () => { setTimeout(initTransaksiPage, 150); return renderTransaksiPage(); })
   .add('/akun', accountPage)
   .add('/pengaturan', () => { setTimeout(initSettingsPage, 150); return settingsPage(); })
   .add('/stok/awal', () => { setTimeout(initStokAwalPage, 150); return renderStokAwalPage(); })
-  .add('/stok/keluar-laku', () => placeholderPage('Stok Keluar — Laku', 'Laporan stok keluar akibat penjualan.'))
+  .add('/stok/keluar-laku', () => { setTimeout(initStokKeluarPage, 150); return renderStokKeluarPage(); })
   .add('/stok/keluar-mutasi', () => placeholderPage('Stok Keluar — Mutasi', 'Laporan mutasi antar cabang/gudang.'))
   .add('/stok/retur', () => placeholderPage('Stok Retur', 'Proses dan laporan retur barang.'))
   .add('/stok/total', () => placeholderPage('Stok Total', 'Rekap stok keseluruhan semua SKU.'))

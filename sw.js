@@ -29,6 +29,9 @@ const PRECACHE = [
   './assets/vendor/zxing/zxing.min.js',
   './js/app.js',
   './js/auth.js',
+  './js/cart.js',
+  './js/report.js',
+  './js/sales.js',
   './js/pwa.js',
   './js/router.js',
   './js/scanner.js',
@@ -39,6 +42,8 @@ const PRECACHE = [
   './js/pages/home.js',
   './js/pages/login.js',
   './js/pages/stok-awal.js',
+  './js/pages/stok-keluar.js',
+  './js/pages/transaksi.js',
   './js/pages/update-harga.js',
   './js/pages/users.js'
 ];

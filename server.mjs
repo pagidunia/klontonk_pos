@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Server pengembangan Klontonk POS — pengganti `python3 -m http.server`.
 //
-// Selain menyajikan file statis, server ini menerima PUT /api/stock dan menulis ulang
-// blok "BEGIN STOCK_DATA ... END STOCK_DATA" di js/stock.js. Itulah cara aplikasi
-// mengubah data stok & harga tanpa Local Storage (browser tidak boleh menulis file).
+// Selain menyajikan file statis, server ini menerima:
+//   PUT /api/stock  → menulis ulang blok "BEGIN STOCK_DATA ... END STOCK_DATA" di js/stock.js
+//   PUT /api/sales  → menulis ulang blok "BEGIN SALES_DATA ... END SALES_DATA" di js/sales.js
+// Itulah cara aplikasi menyimpan stok, harga, dan riwayat penjualan tanpa Local Storage
+// (browser tidak boleh menulis file).
 //
 // Jalankan:  node server.mjs            (http://localhost:8080)
 // Opsi env:  PORT=8080  HOST=127.0.0.1  (pakai HOST=0.0.0.0 untuk uji dari HP di jaringan yang sama)
@@ -17,13 +19,14 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const STOCK_FILE = path.join(ROOT, 'js', 'stock.js');
+const SALES_FILE = path.join(ROOT, 'js', 'sales.js');
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || '127.0.0.1';
 const MAX_BODY_BYTES = 512 * 1024;
+const MAX_SALES_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_ITEMS_PER_TENANT = 2000;
-
-const BEGIN_MARK = '// BEGIN STOCK_DATA';
-const END_MARK = '// END STOCK_DATA';
+const MAX_SALES_PER_TENANT = 20000;
+const MAX_LINES_PER_SALE = 200;
 
 // Aturan validasi — harus sama dengan js/stock.js.
 const UNITS = ['pcs', 'kg', 'liter', 'pak', 'bungkus', 'dus', 'karung', 'renceng'];
@@ -33,6 +36,9 @@ const TENANT_ID_PATTERN = /^T\d{3}$/;
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const NAME_PATTERN = /^[\p{L}\p{N} .,'()&/+-]{2,60}$/u;
 const BARCODE_PATTERN = /^[A-Za-z0-9._-]{4,40}$/;
+const SALE_NO_PATTERN = /^TRX-\d{8}-\d{6}(-\d{1,3})?$/;
+const CASHIER_PATTERN = /^[\p{L}\p{N} .,'()&/+-]{1,60}$/u;
+const PAY_METHODS = ['tunai', 'nontunai'];
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -92,35 +98,85 @@ function sanitize(data) {
   return clean;
 }
 
+// Riwayat penjualan per tenant. Total dihitung ulang dari baris agar data tidak bisa dipalsukan.
+function sanitizeSales(data) {
+  const fail = (message) => { throw new HttpError(422, message); };
+  if (!data || typeof data !== 'object' || Array.isArray(data)) fail('Data harus berupa objek per tenant.');
+
+  const clean = {};
+  for (const [tenantId, sales] of Object.entries(data)) {
+    if (!TENANT_ID_PATTERN.test(tenantId)) fail(`ID tenant tidak valid: ${tenantId}`);
+    if (!Array.isArray(sales) || sales.length > MAX_SALES_PER_TENANT) fail(`Riwayat penjualan ${tenantId} tidak valid.`);
+
+    const seenNumbers = new Set();
+    clean[tenantId] = sales.map((sale, index) => {
+      const where = `${tenantId} #${index + 1}`;
+      if (!sale || typeof sale !== 'object') fail(`Penjualan ${where} tidak valid.`);
+      const { no, at, cashier, method, total, paid, lines } = sale;
+
+      if (typeof no !== 'string' || !SALE_NO_PATTERN.test(no) || seenNumbers.has(no)) fail(`Nomor transaksi ${where} tidak valid atau ganda.`);
+      seenNumbers.add(no);
+      if (typeof at !== 'string' || Number.isNaN(Date.parse(at))) fail(`Waktu ${where} tidak valid.`);
+      if (typeof cashier !== 'string' || !CASHIER_PATTERN.test(cashier)) fail(`Nama kasir ${where} tidak valid.`);
+      if (!PAY_METHODS.includes(method)) fail(`Metode bayar ${where} tidak valid.`);
+      if (!Array.isArray(lines) || lines.length < 1 || lines.length > MAX_LINES_PER_SALE) fail(`Baris barang ${where} tidak valid.`);
+
+      const seenItems = new Set();
+      const cleanLines = lines.map((line, lineIndex) => {
+        const at2 = `${where} baris ${lineIndex + 1}`;
+        if (!line || typeof line !== 'object') fail(`Baris ${at2} tidak valid.`);
+        const { id, name, unit, qty, price } = line;
+        if (typeof id !== 'string' || !ITEM_ID_PATTERN.test(id) || seenItems.has(id)) fail(`ID barang ${at2} tidak valid atau ganda.`);
+        seenItems.add(id);
+        if (typeof name !== 'string' || !NAME_PATTERN.test(name)) fail(`Nama barang ${at2} tidak valid.`);
+        if (!UNITS.includes(unit)) fail(`Satuan ${at2} tidak valid.`);
+        if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY) fail(`Jumlah ${at2} tidak valid.`);
+        if (!Number.isInteger(price) || price < 1 || price > MAX_PRICE) fail(`Harga ${at2} tidak valid.`);
+        return { id, name, unit, qty, price };
+      });
+
+      const sum = cleanLines.reduce((acc, line) => acc + line.qty * line.price, 0);
+      if (total !== sum) fail(`Total ${where} tidak sama dengan jumlah barisnya.`);
+      if (!Number.isInteger(paid) || paid < total || paid > 1000000000) fail(`Uang diterima ${where} tidak valid.`);
+
+      return { no, at, cashier, method, total, paid, lines: cleanLines };
+    });
+  }
+  return clean;
+}
+
 // Penulisan diserialkan agar dua simpan beruntun tidak saling menimpa.
 let writeQueue = Promise.resolve();
 
-function writeStockData(data) {
+// Ganti isi blok "// BEGIN <NAME> ... // END <NAME>" di sebuah file js dengan `const <NAME> = <data>;`
+function writeDataBlock(file, name, data) {
   const job = writeQueue.then(async () => {
-    const source = await readFile(STOCK_FILE, 'utf8');
-    const begin = source.indexOf(BEGIN_MARK);
-    const end = source.indexOf(END_MARK);
+    const beginMark = `// BEGIN ${name}`;
+    const endMark = `// END ${name}`;
+    const source = await readFile(file, 'utf8');
+    const begin = source.indexOf(beginMark);
+    const end = source.indexOf(endMark);
     if (begin === -1 || end === -1 || end < begin) {
-      throw new HttpError(500, 'Penanda BEGIN/END STOCK_DATA tidak ditemukan di js/stock.js.');
+      throw new HttpError(500, `Penanda BEGIN/END ${name} tidak ditemukan di ${path.relative(ROOT, file)}.`);
     }
-    const block = `${BEGIN_MARK}\nconst STOCK_DATA = ${JSON.stringify(data, null, 2)};\n`;
+    const block = `${beginMark}\nconst ${name} = ${JSON.stringify(data, null, 2)};\n`;
     const next = source.slice(0, begin) + block + source.slice(end);
 
-    const temp = `${STOCK_FILE}.tmp`;
+    const temp = `${file}.tmp`;
     await writeFile(temp, next, 'utf8');
-    await rename(temp, STOCK_FILE); // atomik: file tidak pernah setengah tertulis
+    await rename(temp, file); // atomik: file tidak pernah setengah tertulis
   });
   writeQueue = job.catch(() => {});
   return job;
 }
 
-function readBody(req) {
+function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     req.on('data', (chunk) => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > limit) {
         reject(new HttpError(413, 'Data terlalu besar.'));
         req.destroy();
         return;
@@ -132,7 +188,7 @@ function readBody(req) {
   });
 }
 
-async function handleStockSave(req, res) {
+async function handleSave(req, res, { limit, sanitize: clean, file, name }) {
   const origin = req.headers.origin;
   if (origin) {
     let sameOrigin = false;
@@ -145,13 +201,13 @@ async function handleStockSave(req, res) {
 
   let parsed;
   try {
-    parsed = JSON.parse(await readBody(req));
+    parsed = JSON.parse(await readBody(req, limit));
   } catch (err) {
     if (err instanceof HttpError) throw err;
     throw new HttpError(400, 'JSON tidak valid.');
   }
 
-  await writeStockData(sanitize(parsed));
+  await writeDataBlock(file, name, clean(parsed));
   res.writeHead(204, { 'Cache-Control': 'no-store' });
   res.end();
 }
@@ -190,9 +246,13 @@ const server = http.createServer(async (req, res) => {
   try {
     const { pathname } = new URL(req.url, 'http://localhost');
 
-    if (pathname === '/api/stock') {
+    const saveTargets = {
+      '/api/stock': { limit: MAX_BODY_BYTES, sanitize, file: STOCK_FILE, name: 'STOCK_DATA' },
+      '/api/sales': { limit: MAX_SALES_BODY_BYTES, sanitize: sanitizeSales, file: SALES_FILE, name: 'SALES_DATA' }
+    };
+    if (saveTargets[pathname]) {
       if (req.method !== 'PUT') throw new HttpError(405, 'Gunakan PUT.');
-      await handleStockSave(req, res);
+      await handleSave(req, res, saveTargets[pathname]);
       return;
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'Metode tidak diizinkan.');
