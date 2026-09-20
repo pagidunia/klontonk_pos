@@ -21,7 +21,7 @@ const STOCK_DATA = {
     {
       "id": "stk_seed_0",
       "name": "Beras Lahap",
-      "qty": 100,
+      "qty": 95,
       "unit": "kg",
       "price": 65000
     },
@@ -94,23 +94,23 @@ const STOCK_DATA = {
     {
       "id": "stk_seed_0",
       "name": "Beras Lahap",
-      "qty": 100,
+      "qty": 93,
       "unit": "kg",
-      "price": 65000
+      "price": 65500
     },
     {
       "id": "stk_seed_1",
       "name": "Gulaku",
-      "qty": 60,
+      "qty": 59,
       "unit": "pak",
-      "price": 30000
+      "price": 30300
     },
     {
       "id": "stk_seed_2",
       "name": "Minyak Goreng Sania",
       "qty": 48,
       "unit": "pcs",
-      "price": 40000
+      "price": 40400
     },
     {
       "id": "stk_seed_3",
@@ -122,44 +122,45 @@ const STOCK_DATA = {
     {
       "id": "stk_seed_4",
       "name": "Garam Kapal",
-      "qty": 50,
+      "qty": 49,
       "unit": "bungkus",
-      "price": 8000
+      "price": 8800
     },
     {
       "id": "stk_seed_5",
       "name": "Mie Sedap Goreng",
       "qty": 12,
       "unit": "dus",
-      "price": 30000
+      "price": 30100
     },
     {
       "id": "stk_seed_6",
       "name": "Telur Ayam",
       "qty": 25,
       "unit": "kg",
-      "price": 30000
+      "price": 30050
     },
     {
       "id": "stk_seed_7",
       "name": "Kopi Kapal Api",
-      "qty": 20,
+      "qty": 10,
       "unit": "renceng",
-      "price": 15000
+      "price": 15150
     },
     {
       "id": "stk_seed_8",
       "name": "Teh Poci",
       "qty": 15,
       "unit": "pak",
-      "price": 12000
+      "price": 12200
     },
     {
       "id": "stk_seed_9",
       "name": "Cutter Kenko",
-      "qty": 1,
+      "qty": 9,
       "unit": "pcs",
-      "barcode": "8998838060018"
+      "barcode": "8998838060018",
+      "price": 15500
     }
   ],
   "T003": [
@@ -382,5 +383,28 @@ export const StockStore = {
     const next = items.map(i => (i.id === id ? { ...i, price } : i));
     commit(next);
     return { success: true, item: next.find(i => i.id === id) };
+  },
+
+  // Penjualan: kurangi stok beberapa barang sekaligus. lines = [{ id, qty }].
+  // Semua atau tidak sama sekali — bila ada satu baris tidak valid, stok tidak berubah.
+  sell(lines) {
+    if (!Array.isArray(lines) || lines.length === 0) return { success: false, error: 'Keranjang kosong.' };
+
+    const items = read();
+    const sold = new Map();
+    for (const line of lines) {
+      const item = items.find(i => i.id === (line && line.id));
+      if (!item) return { success: false, error: 'Ada barang yang sudah tidak ada di daftar stok.' };
+      if (!Number.isInteger(line.qty) || line.qty < 1 || sold.has(item.id)) {
+        return { success: false, error: `Jumlah "${item.name}" tidak valid.` };
+      }
+      if (line.qty > item.qty) {
+        return { success: false, error: `Stok "${item.name}" tinggal ${item.qty} ${item.unit}.` };
+      }
+      sold.set(item.id, line.qty);
+    }
+
+    commit(items.map(i => (sold.has(i.id) ? { ...i, qty: i.qty - sold.get(i.id) } : i)));
+    return { success: true };
   }
 };
