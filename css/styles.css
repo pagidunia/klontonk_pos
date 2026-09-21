@@ -2841,3 +2841,39 @@ ul { list-style: none; }
 .rep-empty h3 { font-size: 16px; font-weight: 800; }
 .rep-empty p { max-width: 280px; font-size: 13px; line-height: 1.5; color: var(--text-muted); }
 .rep-empty .btn { margin-top: var(--space-2); text-decoration: none; }
+
+/* ============ STOK TOTAL (.stt-*) ============ */
+.stt-page { display: flex; flex-direction: column; gap: 14px; font-variant-numeric: tabular-nums; }
+.stt-tools { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.stt-search { position: relative; }
+.stt-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); display: flex; color: var(--text-muted); pointer-events: none; }
+.stt-search .form-input { width: 100%; min-height: 46px; padding-left: 42px; }
+.stt-chips { display: flex; gap: 8px; }
+.stt-chip {
+  min-height: 36px; padding: 0 16px; font: inherit; font-size: 13px; font-weight: 700;
+  color: var(--text-secondary); background: var(--bg-surface);
+  border: 1px solid var(--border-subtle); border-radius: 999px; cursor: pointer;
+}
+.stt-chip.is-active { color: #FFFFFF; background: var(--color-primary); border-color: var(--color-primary); }
+.stt-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.stt-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle); border-left: 3px solid transparent; padding-left: 10px;
+}
+.stt-row:last-child { border-bottom: 0; }
+.stt-row.is-menipis { border-left-color: #E0A100; }
+.stt-row.is-habis { border-left-color: #D64545; }
+.stt-meta { flex: 1; min-width: 0; }
+.stt-name { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text-primary); overflow-wrap: anywhere; }
+.stt-sub { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.stt-qty { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.stt-qty-num { margin: 0; font-size: 13px; color: var(--text-muted); }
+.stt-qty-num strong { font-size: 18px; font-weight: 800; color: var(--text-primary); }
+.stt-badge { padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 999px; }
+.stt-badge.is-aman { color: #1B6B3A; background: #E1F4E8; }
+.stt-badge.is-menipis { color: #7A5300; background: #FCEFC7; }
+.stt-badge.is-habis { color: #A32929; background: #FBE1E1; }
+[data-theme="dark"] .stt-badge.is-aman { color: #7FDCA0; background: rgba(46, 160, 90, 0.18); }
+[data-theme="dark"] .stt-badge.is-menipis { color: #F5C84B; background: rgba(224, 161, 0, 0.18); }
+[data-theme="dark"] .stt-badge.is-habis { color: #FF9C9C; background: rgba(214, 69, 69, 0.2); }
+.stt-empty { padding: 24px 8px; font-size: 13px; text-align: center; color: var(--text-muted); }

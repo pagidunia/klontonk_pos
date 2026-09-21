@@ -43,6 +43,7 @@ const PRECACHE = [
   './js/pages/login.js',
   './js/pages/stok-awal.js',
   './js/pages/stok-keluar.js',
+  './js/pages/stok-total.js',
   './js/pages/transaksi.js',
   './js/pages/update-harga.js',
   './js/pages/users.js'
