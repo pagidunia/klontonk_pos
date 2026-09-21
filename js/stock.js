@@ -12,7 +12,7 @@ const COLUMNS = 'tenant_id,id,name,qty,unit,barcode,price';
 const MAX_QTY = 1000000;
 export const MAX_PRICE = 100000000;
 const NAME_PATTERN = /^[\p{L}\p{N} .,'()&/+-]{2,60}$/u;
-export const BARCODE_PATTERN = /^[A-Za-z0-9._-]{4,40}$/;
+const BARCODE_PATTERN = /^[A-Za-z0-9._-]{4,40}$/;
 
 const sameBarcode = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
 
@@ -53,8 +53,7 @@ const upsert = (item) => rest(`${TABLE}?on_conflict=tenant_id,id`, {
     qty: item.qty,
     unit: item.unit,
     barcode: item.barcode || null,
-    price: item.price ?? null,
-    updated_at: new Date().toISOString()
+    price: item.price ?? null
   }
 });
 
@@ -186,7 +185,7 @@ export const StockStore = {
     const next = items.map(i => (i.id === id ? { ...i, price } : i));
     commit(next);
     const key = rowKey(id);
-    persist(() => rest(`${TABLE}?${key}`, { method: 'PATCH', body: { price, updated_at: new Date().toISOString() } }));
+    persist(() => rest(`${TABLE}?${key}`, { method: 'PATCH', body: { price } }));
     return { success: true, item: next.find(i => i.id === id) };
   },
 
@@ -195,5 +194,10 @@ export const StockStore = {
   applySale(lines) {
     const sold = new Map(lines.map(({ id, qty }) => [id, qty]));
     commit(read().map(i => (sold.has(i.id) ? { ...i, qty: Math.max(0, i.qty - sold.get(i.id)) } : i)));
+  },
+
+  // Sesuaikan salinan lokal setelah retur dicatat database (ReturnStore.process): delta + (retur pelanggan) atau - (supplier).
+  applyDelta(id, delta) {
+    commit(read().map(i => (i.id === id ? { ...i, qty: Math.max(0, i.qty + delta) } : i)));
   }
 };

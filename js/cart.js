@@ -77,11 +77,3 @@ export function parseAmount(text) {
   const value = Number(digits);
   return Number.isSafeInteger(value) ? value : null;
 }
-
-const pad = (n, size = 2) => String(n).padStart(size, '0');
-
-export function trxNumber(date = new Date()) {
-  const day = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
-  const time = `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
-  return `TRX-${day}-${time}`;
-}

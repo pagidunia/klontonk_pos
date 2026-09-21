@@ -36,7 +36,6 @@
   --text-primary: #2B2420;
   --text-secondary: #5C5248;
   --text-muted: #6F6357;
-  --text-inverse: #FFFFFF;
   
   /* === Shadows === */
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -52,7 +51,6 @@
   --radius-circle: 50%;
   
   /* === Spacing === */
-  --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
@@ -85,7 +83,6 @@
   --text-primary: #E8EEF5;
   --text-secondary: #9AA8BC;
   --text-muted: #5A6B82;
-  --text-inverse: #0A1628;
   
   --color-primary-soft: #0E2A4A;
   
@@ -2837,3 +2834,26 @@ ul { list-style: none; }
 .sheet-item[data-tone="wait"] .sheet-item-icon::after { animation: dbPulse 1s ease-in-out infinite; }
 @keyframes dbPulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .sheet-item[data-tone="wait"] .sheet-item-icon::after { animation: none; } }
+
+/* ============ STOK RETUR (.ret-*) ============ */
+.ret-page { display: flex; flex-direction: column; gap: 14px; font-variant-numeric: tabular-nums; }
+.ret-seg { grid-template-columns: repeat(2, 1fr); }
+.ret-preview { min-height: 20px; margin: 4px 0 12px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.ret-preview.is-warn { color: #B42318; }
+[data-theme="dark"] .ret-preview.is-warn { color: #FF9C9C; }
+.ret-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.ret-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border-subtle); }
+.ret-row:last-child { border-bottom: 0; }
+.ret-main { flex: 1; min-width: 0; }
+.ret-name { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text-primary); overflow-wrap: anywhere; }
+.ret-sub { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.ret-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.ret-qty { margin: 0; font-size: 13px; color: var(--text-muted); }
+.ret-qty strong { font-size: 17px; font-weight: 800; color: var(--text-primary); }
+.ret-money { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.ret-badge { padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 999px; }
+.ret-badge.is-pelanggan { color: #1B6B3A; background: #E1F4E8; }
+.ret-badge.is-supplier { color: #7A5300; background: #FCEFC7; }
+[data-theme="dark"] .ret-badge.is-pelanggan { color: #7FDCA0; background: rgba(46, 160, 90, 0.18); }
+[data-theme="dark"] .ret-badge.is-supplier { color: #F5C84B; background: rgba(224, 161, 0, 0.18); }
+.ret-empty { padding: 24px 8px; font-size: 13px; text-align: center; color: var(--text-muted); }
