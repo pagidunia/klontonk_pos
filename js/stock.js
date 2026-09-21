@@ -1,11 +1,14 @@
 import { TenantStore } from './tenant.js';
+import { rest, fetchAll } from './supabase.js';
 
-// Stok & harga per tenant. Sumber datanya blok STOCK_DATA di bawah (tanpa Local Storage).
-// Setiap tambah/edit/hapus/ubah harga, data dikirim ke server.mjs (PUT api/stock) yang
-// menulis ulang blok itu di file ini. Jangan hapus penanda BEGIN/END STOCK_DATA.
-// Validasi dilakukan di sini (dan diulang di server.mjs); halaman hanya lapisan tampilan.
-const SAVE_URL = 'api/stock';
-const LEGACY_KEY_PREFIX = 'klontonk:stok-awal:';
+// Stok & harga per tenant, disimpan di tabel `stock_items` di Supabase (db/schema.sql).
+// Di browser hanya ada salinan yang dimuat saat aplikasi dibuka (StockStore.load). Perubahan langsung
+// tampil di sini lalu dikirim ke database; bila ditolak (mis. nama ganda, atau tak punya akses),
+// perubahan dibatalkan dan daftar dimuat ulang. Penjualan tidak lewat sini: fungsi checkout() di
+// database yang mengurangi stok (SalesStore.checkout), lalu salinan ini disesuaikan lewat applySale().
+// Validasi dilakukan di sini (untuk tampilan) dan diulang oleh batasan database.
+const TABLE = 'stock_items';
+const COLUMNS = 'tenant_id,id,name,qty,unit,barcode,price';
 const MAX_QTY = 1000000;
 export const MAX_PRICE = 100000000;
 const NAME_PATTERN = /^[\p{L}\p{N} .,'()&/+-]{2,60}$/u;
@@ -15,239 +18,9 @@ const sameBarcode = (a, b) => String(a || '').toLowerCase() === String(b || '').
 
 export const UNITS = ['pcs', 'kg', 'liter', 'pak', 'bungkus', 'dus', 'karung', 'renceng'];
 
-// BEGIN STOCK_DATA
-const STOCK_DATA = {
-  "T001": [
-    {
-      "id": "stk_seed_0",
-      "name": "Beras Lahap",
-      "qty": 95,
-      "unit": "kg",
-      "price": 65000
-    },
-    {
-      "id": "stk_seed_1",
-      "name": "Gulaku",
-      "qty": 60,
-      "unit": "pak",
-      "price": 30000
-    },
-    {
-      "id": "stk_seed_2",
-      "name": "Minyak Goreng Sania",
-      "qty": 48,
-      "unit": "pcs",
-      "price": 40000
-    },
-    {
-      "id": "stk_seed_3",
-      "name": "Tepung Segitiga",
-      "qty": 35,
-      "unit": "pak",
-      "price": 20000
-    },
-    {
-      "id": "stk_seed_4",
-      "name": "Garam Kapal",
-      "qty": 50,
-      "unit": "bungkus",
-      "price": 8000
-    },
-    {
-      "id": "stk_seed_5",
-      "name": "Mie Sedap Goreng",
-      "qty": 12,
-      "unit": "dus",
-      "price": 30000
-    },
-    {
-      "id": "stk_seed_6",
-      "name": "Telur Ayam",
-      "qty": 25,
-      "unit": "kg",
-      "price": 30000
-    },
-    {
-      "id": "stk_seed_7",
-      "name": "Kopi Kapal Api",
-      "qty": 20,
-      "unit": "renceng",
-      "price": 15000
-    },
-    {
-      "id": "stk_seed_8",
-      "name": "Teh Poci",
-      "qty": 15,
-      "unit": "pak",
-      "price": 12000
-    },
-    {
-      "id": "stk_seed_9",
-      "name": "Cutter Kenko",
-      "qty": 1,
-      "unit": "pcs",
-      "barcode": "8998838060018",
-      "price": 15000
-    }
-  ],
-  "T002": [
-    {
-      "id": "stk_seed_0",
-      "name": "Beras Lahap",
-      "qty": 93,
-      "unit": "kg",
-      "price": 65500
-    },
-    {
-      "id": "stk_seed_1",
-      "name": "Gulaku",
-      "qty": 59,
-      "unit": "pak",
-      "price": 30300
-    },
-    {
-      "id": "stk_seed_2",
-      "name": "Minyak Goreng Sania",
-      "qty": 48,
-      "unit": "pcs",
-      "price": 40400
-    },
-    {
-      "id": "stk_seed_3",
-      "name": "Tepung Segitiga",
-      "qty": 35,
-      "unit": "pak",
-      "price": 20000
-    },
-    {
-      "id": "stk_seed_4",
-      "name": "Garam Kapal",
-      "qty": 49,
-      "unit": "bungkus",
-      "price": 8800
-    },
-    {
-      "id": "stk_seed_5",
-      "name": "Mie Sedap Goreng",
-      "qty": 12,
-      "unit": "dus",
-      "price": 30100
-    },
-    {
-      "id": "stk_seed_6",
-      "name": "Telur Ayam",
-      "qty": 25,
-      "unit": "kg",
-      "price": 30050
-    },
-    {
-      "id": "stk_seed_7",
-      "name": "Kopi Kapal Api",
-      "qty": 10,
-      "unit": "renceng",
-      "price": 15150
-    },
-    {
-      "id": "stk_seed_8",
-      "name": "Teh Poci",
-      "qty": 15,
-      "unit": "pak",
-      "price": 12200
-    },
-    {
-      "id": "stk_seed_9",
-      "name": "Cutter Kenko",
-      "qty": 9,
-      "unit": "pcs",
-      "barcode": "8998838060018",
-      "price": 15500
-    }
-  ],
-  "T003": [
-    {
-      "id": "stk_seed_0",
-      "name": "Beras Lahap",
-      "qty": 100,
-      "unit": "kg",
-      "price": 65000
-    },
-    {
-      "id": "stk_seed_1",
-      "name": "Gulaku",
-      "qty": 60,
-      "unit": "pak",
-      "price": 30000
-    },
-    {
-      "id": "stk_seed_2",
-      "name": "Minyak Goreng Sania",
-      "qty": 48,
-      "unit": "pcs",
-      "price": 40000
-    },
-    {
-      "id": "stk_seed_3",
-      "name": "Tepung Segitiga",
-      "qty": 35,
-      "unit": "pak",
-      "price": 20000
-    },
-    {
-      "id": "stk_seed_4",
-      "name": "Garam Kapal",
-      "qty": 50,
-      "unit": "bungkus",
-      "price": 8000
-    },
-    {
-      "id": "stk_seed_5",
-      "name": "Mie Sedap Goreng",
-      "qty": 12,
-      "unit": "dus",
-      "price": 30000
-    },
-    {
-      "id": "stk_seed_6",
-      "name": "Telur Ayam",
-      "qty": 25,
-      "unit": "kg",
-      "price": 30000
-    },
-    {
-      "id": "stk_seed_7",
-      "name": "Kopi Kapal Api",
-      "qty": 20,
-      "unit": "renceng",
-      "price": 15000
-    },
-    {
-      "id": "stk_seed_8",
-      "name": "Teh Poci",
-      "qty": 15,
-      "unit": "pak",
-      "price": 12000
-    },
-    {
-      "id": "stk_seed_9",
-      "name": "Cutter Kenko",
-      "qty": 1,
-      "unit": "pcs",
-      "barcode": "8998838060018"
-    }
-  ]
-};
-// END STOCK_DATA
-
-let data = structuredClone(STOCK_DATA);
+let data = {}; // { T001: [item...], ... } — salinan dari database
 let saveChain = Promise.resolve();
 const saveErrorHandlers = new Set();
-
-// Data stok versi lama tersimpan di Local Storage; sekarang tidak dipakai lagi.
-try {
-  Object.keys(localStorage)
-    .filter((key) => key.startsWith(LEGACY_KEY_PREFIX))
-    .forEach((key) => localStorage.removeItem(key));
-} catch (e) { /* storage diblokir — tidak masalah */ }
 
 const newId = () => 'stk_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
 
@@ -257,35 +30,50 @@ function read() {
 
 function commit(items) {
   data = { ...data, [TenantStore.getCurrent().id]: items };
-  persist();
 }
 
-async function saveAll() {
-  let response;
-  try {
-    response = await fetch(SAVE_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-  } catch (e) {
-    throw new Error('Server penyimpanan tidak terjangkau (offline?).');
+const enc = encodeURIComponent;
+const rowKey = (id) => `tenant_id=eq.${TenantStore.getCurrent().id}&id=eq.${enc(id)}`;
+
+// Baris database → bentuk yang dipakai aplikasi (field kosong dihilangkan).
+const toItem = ({ id, name, qty, unit, barcode, price }) => ({
+  id, name, qty, unit,
+  ...(barcode !== null && { barcode }),
+  ...(price !== null && { price })
+});
+
+// Tambah atau ganti satu barang (upsert menurut kunci tenant_id + id).
+const upsert = (item) => rest(`${TABLE}?on_conflict=tenant_id,id`, {
+  method: 'POST',
+  headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+  body: {
+    tenant_id: TenantStore.getCurrent().id,
+    id: item.id,
+    name: item.name,
+    qty: item.qty,
+    unit: item.unit,
+    barcode: item.barcode || null,
+    price: item.price ?? null,
+    updated_at: new Date().toISOString()
   }
-  if (response.ok) return;
-  if (response.status === 404 || response.status === 405) {
-    throw new Error('Server penyimpanan belum aktif. Jalankan "node server.mjs", bukan http.server.');
-  }
-  throw new Error(`Server menolak data (kode ${response.status}).`);
+});
+
+function describe(result) {
+  if (result.code === '23505') return 'Nama atau barcode sudah dipakai barang lain.';
+  if (result.status === 403 || result.code === '42501') return 'Tidak punya akses untuk perubahan ini.';
+  if (result.expired) return 'Sesi berakhir. Silakan login ulang.';
+  return result.message;
 }
 
-// Simpan diserialkan; data terbaru dikirim tiap giliran sehingga simpan beruntun tidak saling menimpa.
-function persist() {
-  saveChain = saveChain
-    .then(saveAll)
-    .catch((err) => {
-      const message = `${err.message} Perubahan belum tersimpan ke js/stock.js dan hilang saat refresh.`;
-      saveErrorHandlers.forEach((handler) => handler(message));
-    });
+// Kirim perubahan secara berurutan. Bila ditolak: beri tahu, lalu samakan dengan database.
+function persist(send) {
+  saveChain = saveChain.then(async () => {
+    const result = await send();
+    if (result.ok) return;
+    const message = `${describe(result)} Perubahan dibatalkan.`;
+    saveErrorHandlers.forEach((handler) => handler(message));
+    await StockStore.load();
+  });
 }
 
 // Mengembalikan { ok: true, value } atau { ok: false, error }
@@ -321,10 +109,21 @@ function validate(input, items, ignoreId) {
 }
 
 export const StockStore = {
-  // Dipanggil bila data gagal ditulis ke js/stock.js; mengembalikan fungsi untuk berhenti mendengarkan.
+  // Dipanggil bila database menolak / tidak bisa menyimpan; mengembalikan fungsi untuk berhenti mendengarkan.
   onSaveError(handler) {
     saveErrorHandlers.add(handler);
     return () => saveErrorHandlers.delete(handler);
+  },
+
+  // Muat stok dari database (RLS: admin semua tenant, kasir hanya tenant sendiri). Dipanggil saat aplikasi
+  // dibuka (setelah login) dan setelah simpanan ditolak.
+  async load() {
+    const result = await fetchAll(`${TABLE}?select=${COLUMNS}&order=created_at,name`);
+    if (!result.ok) return { success: false, error: describe(result), expired: !!result.expired };
+    const grouped = Object.fromEntries(TenantStore.getAll().map((tenant) => [tenant.id, []]));
+    for (const row of result.data) (grouped[row.tenant_id] ||= []).push(toItem(row));
+    data = grouped;
+    return { success: true };
   },
 
   list() {
@@ -345,6 +144,7 @@ export const StockStore = {
 
     const item = { id: newId(), ...checked.value };
     commit([...items, item]);
+    persist(() => upsert(item));
     return { success: true, item };
   },
 
@@ -357,13 +157,16 @@ export const StockStore = {
 
     const next = items.map(i => (i.id === id ? { ...i, ...checked.value } : i));
     commit(next);
-    return { success: true, item: next.find(i => i.id === id) };
+    const item = next.find(i => i.id === id);
+    persist(() => upsert(item));
+    return { success: true, item };
   },
 
   remove(id) {
     const items = read();
     if (!items.some(i => i.id === id)) return { success: false, error: 'Barang tidak ditemukan.' };
     commit(items.filter(i => i.id !== id));
+    persist(() => rest(`${TABLE}?${rowKey(id)}`, { method: 'DELETE' }));
     return { success: true };
   },
 
@@ -382,29 +185,15 @@ export const StockStore = {
 
     const next = items.map(i => (i.id === id ? { ...i, price } : i));
     commit(next);
+    const key = rowKey(id);
+    persist(() => rest(`${TABLE}?${key}`, { method: 'PATCH', body: { price, updated_at: new Date().toISOString() } }));
     return { success: true, item: next.find(i => i.id === id) };
   },
 
-  // Penjualan: kurangi stok beberapa barang sekaligus. lines = [{ id, qty }].
-  // Semua atau tidak sama sekali — bila ada satu baris tidak valid, stok tidak berubah.
-  sell(lines) {
-    if (!Array.isArray(lines) || lines.length === 0) return { success: false, error: 'Keranjang kosong.' };
-
-    const items = read();
-    const sold = new Map();
-    for (const line of lines) {
-      const item = items.find(i => i.id === (line && line.id));
-      if (!item) return { success: false, error: 'Ada barang yang sudah tidak ada di daftar stok.' };
-      if (!Number.isInteger(line.qty) || line.qty < 1 || sold.has(item.id)) {
-        return { success: false, error: `Jumlah "${item.name}" tidak valid.` };
-      }
-      if (line.qty > item.qty) {
-        return { success: false, error: `Stok "${item.name}" tinggal ${item.qty} ${item.unit}.` };
-      }
-      sold.set(item.id, line.qty);
-    }
-
-    commit(items.map(i => (sold.has(i.id) ? { ...i, qty: i.qty - sold.get(i.id) } : i)));
-    return { success: true };
+  // Sesuaikan salinan lokal setelah penjualan berhasil dicatat database (SalesStore.checkout).
+  // lines = [{ id, qty }]. Stok di database sudah dikurangi oleh fungsi checkout().
+  applySale(lines) {
+    const sold = new Map(lines.map(({ id, qty }) => [id, qty]));
+    commit(read().map(i => (sold.has(i.id) ? { ...i, qty: Math.max(0, i.qty - sold.get(i.id)) } : i)));
   }
 };

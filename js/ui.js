@@ -196,7 +196,7 @@ export const UI = {
       panel.setAttribute('aria-modal', 'true');
 
       const itemHtml = (it, i) => `
-        <button class="sheet-item ${it.danger ? 'danger' : ''}" data-index="${i}" style="--i:${i}">
+        <button class="sheet-item ${it.danger ? 'danger' : ''}" data-index="${i}" data-id="${this._escape(String(it.id ?? ''))}"${it.tone ? ` data-tone="${this._escape(it.tone)}"` : ''} style="--i:${i}">
           ${it.icon ? `<span class="sheet-item-icon">${it.icon}</span>` : ''}
           <span class="sheet-item-text">
             <span class="sheet-item-label">${this._escape(it.label)}</span>

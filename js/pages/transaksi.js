@@ -6,13 +6,13 @@ import { UI } from '../ui.js';
 import { scanBarcode } from '../scanner.js';
 import {
   MAX_PAYMENT, formatRupiah, isSellable, changeQty, removeLine, buildLines, sanitizeCart,
-  summarize, balance, cashSuggestions, parseAmount, trxNumber
+  summarize, balance, cashSuggestions, parseAmount
 } from '../cart.js';
 
 // ============ HALAMAN TRANSAKSI (KASIR) ============
 // Alur: pilih barang (cari / scan / ketuk kartu) → keranjang → bayar → struk.
 // Barang & harga dari Stok Awal / Update Harga. Stok berkurang saat pembayaran berhasil
-// (StockStore.sell) dan penjualan dicatat ke SalesStore untuk laporan Stok Keluar — Laku.
+// dan penjualan dicatat lewat SalesStore.checkout (satu transaksi di database: kurangi stok + catat penjualan).
 
 const esc = (value) => UI._escape(String(value ?? ''));
 const escAttr = (value) => esc(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -474,39 +474,46 @@ export function initTransaksiPage() {
     syncCart();
   }
 
-  function pay() {
+  let paying = false;
+
+  async function pay() {
+    if (paying) return; // cegah tekan ganda selama menunggu database
     const lines = currentLines();
-    const { total, paid, canPay } = payState();
+    const { paid, canPay } = payState();
     if (!lines.length || !canPay) return;
 
-    const result = StockStore.sell(lines.map((line) => ({ id: line.id, qty: line.qty })));
+    paying = true;
+    const payBtn = document.getElementById('trxPayBtn');
+    if (payBtn) {
+      payBtn.disabled = true;
+      payBtn.textContent = 'Memproses…';
+    }
+
+    // Total dihitung ulang oleh database dari harga yang tersimpan; struk memakai hasil dari database.
+    const result = await SalesStore.checkout({ method: payMethod, paid, lines });
+    paying = false;
+
     if (!result.success) {
       UI.toast(result.error, { type: 'danger', duration: 5000 });
-      syncCart(); // stok bisa saja berubah; sesuaikan keranjang
+      await StockStore.load(); // stok bisa saja berubah di perangkat lain; samakan lalu sesuaikan keranjang
+      renderGrid();
+      syncCart();
       return;
     }
 
-    const user = Auth.getCurrentUser();
-    const summary = summarize(lines);
-    const cashier = user ? user.name : 'Kasir';
-
-    // Catat penjualan untuk laporan (Stok Keluar — Laku). Struk tetap tampil walau pencatatan gagal.
-    const recorded = SalesStore.record({ cashier, method: payMethod, total, paid, lines });
-    if (!recorded.success) {
-      UI.toast(`${recorded.error} Penjualan ini tidak masuk laporan.`, { type: 'warning', duration: 6000 });
-    }
-
+    const { sale } = result;
+    const summary = summarize(sale.lines);
     const receipt = {
-      no: recorded.success ? recorded.sale.no : trxNumber(new Date()),
-      at: recorded.success ? new Date(recorded.sale.at) : new Date(),
-      cashier,
+      no: sale.no,
+      at: new Date(sale.at),
+      cashier: sale.cashier,
       tenant: TenantStore.getCurrent().name,
-      lines,
+      lines: sale.lines,
       itemCount: summary.itemCount,
-      total,
-      method: payMethod,
-      paid,
-      change: paid - total
+      total: sale.total,
+      method: sale.method,
+      paid: sale.paid,
+      change: sale.paid - sale.total
     };
 
     cart = new Map();

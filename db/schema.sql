@@ -1,0 +1,292 @@
+-- Skema database Klontonk POS (PostgreSQL / Supabase): akun, stok, dan penjualan.
+-- Dijalankan sekali di SQL Editor Supabase (atau lewat psql). Aman diulang (IF NOT EXISTS / OR REPLACE).
+--
+-- MODEL KEAMANAN
+--   * Login memakai Supabase Auth (email + password). Username dipetakan ke email <username>@klontonk.local.
+--   * Pendaftaran Supabase Auth terbuka untuk umum, jadi akun tanpa baris di `profiles` TIDAK punya akses apa pun:
+--     semua kebijakan RLS di bawah mensyaratkan baris profil.
+--   * `profiles` hanya bisa ditulis admin. Penjualan hanya bisa dicatat lewat fungsi checkout().
+--   * Tabel tidak dapat dibaca oleh peran `anon` (tanpa login).
+
+BEGIN;
+
+-- ---------------------------------------------------------------------------
+-- Tenant (cabang) — sama dengan TenantStore._tenants di js/tenant.js.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tenants (
+  id          text PRIMARY KEY CHECK (id ~ '^T[0-9]{3}$'),
+  name        text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60),
+  code        text NOT NULL UNIQUE CHECK (code ~ '^[A-Z]{1,4}$'),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO tenants (id, name, code) VALUES
+  ('T001', 'Pusat',        'TP'),
+  ('T002', 'Warung Merah', 'WM'),
+  ('T003', 'Warung Putih', 'WP')
+ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Profil pengguna: peran dan tenant untuk tiap akun Supabase Auth.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS profiles (
+  id          uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
+  username    text NOT NULL UNIQUE CHECK (username ~ '^[a-z0-9_.]{3,24}$'),
+  name        text NOT NULL CHECK (char_length(btrim(name)) BETWEEN 1 AND 60),
+  role        text NOT NULL DEFAULT 'cashier' CHECK (role IN ('admin', 'cashier')),
+  avatar      text NOT NULL CHECK (char_length(avatar) = 1),
+  tenant_id   text NOT NULL DEFAULT 'T001' REFERENCES tenants (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS profiles_tenant_idx ON profiles (tenant_id);
+
+-- ---------------------------------------------------------------------------
+-- Stok & harga per tenant.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS stock_items (
+  tenant_id  text NOT NULL REFERENCES tenants (id) ON UPDATE CASCADE ON DELETE CASCADE,
+  id         text NOT NULL CHECK (id ~ '^[A-Za-z0-9_-]{1,64}$'),
+  name       text NOT NULL CHECK (char_length(name) BETWEEN 2 AND 60),
+  qty        integer NOT NULL CHECK (qty BETWEEN 0 AND 1000000),
+  unit       text NOT NULL CHECK (unit IN ('pcs', 'kg', 'liter', 'pak', 'bungkus', 'dus', 'karung', 'renceng')),
+  barcode    text CHECK (barcode IS NULL OR barcode ~ '^[A-Za-z0-9._-]{4,40}$'),
+  price      integer CHECK (price IS NULL OR price BETWEEN 1 AND 100000000),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS stock_items_name_uq    ON stock_items (tenant_id, lower(name));
+CREATE UNIQUE INDEX IF NOT EXISTS stock_items_barcode_uq ON stock_items (tenant_id, lower(barcode)) WHERE barcode IS NOT NULL;
+
+-- ---------------------------------------------------------------------------
+-- Riwayat penjualan (header + baris). Diisi hanya oleh checkout().
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sales (
+  tenant_id  text NOT NULL REFERENCES tenants (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  no         text NOT NULL CHECK (no ~ '^TRX-[0-9]{8}-[0-9]{6}(-[0-9]{1,3})?$'),
+  at         timestamptz NOT NULL DEFAULT now(),
+  cashier    text NOT NULL CHECK (char_length(cashier) BETWEEN 1 AND 60),
+  method     text NOT NULL CHECK (method IN ('tunai', 'nontunai')),
+  total      integer NOT NULL CHECK (total >= 1),
+  paid       integer NOT NULL CHECK (paid >= total AND paid <= 1000000000),
+  PRIMARY KEY (tenant_id, no)
+);
+CREATE INDEX IF NOT EXISTS sales_at_idx ON sales (tenant_id, at DESC);
+
+CREATE TABLE IF NOT EXISTS sale_lines (
+  tenant_id  text NOT NULL,
+  sale_no    text NOT NULL,
+  item_id    text NOT NULL,
+  name       text NOT NULL,
+  unit       text NOT NULL,
+  qty        integer NOT NULL CHECK (qty BETWEEN 1 AND 1000000),
+  price      integer NOT NULL CHECK (price BETWEEN 1 AND 100000000),
+  PRIMARY KEY (tenant_id, sale_no, item_id),
+  FOREIGN KEY (tenant_id, sale_no) REFERENCES sales (tenant_id, no) ON DELETE CASCADE
+);
+
+-- ---------------------------------------------------------------------------
+-- Pembantu RLS: peran dan tenant pemanggil, dibaca dari profil (bukan dari token).
+-- SECURITY DEFINER agar bisa membaca `profiles` tanpa terkena RLS-nya sendiri.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.app_role() RETURNS text
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $$ SELECT role FROM public.profiles WHERE id = auth.uid() $$;
+
+CREATE OR REPLACE FUNCTION public.app_tenant() RETURNS text
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $$ SELECT tenant_id FROM public.profiles WHERE id = auth.uid() $$;
+
+-- Boleh mengakses data tenant tertentu: admin semua tenant, kasir hanya tenant sendiri.
+CREATE OR REPLACE FUNCTION public.can_access_tenant(t text) RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $$ SELECT COALESCE((SELECT role = 'admin' OR tenant_id = t FROM public.profiles WHERE id = auth.uid()), false) $$;
+
+-- ---------------------------------------------------------------------------
+-- RLS
+-- ---------------------------------------------------------------------------
+ALTER TABLE tenants     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sales       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sale_lines  ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenants_read ON tenants;
+CREATE POLICY tenants_read ON tenants FOR SELECT TO authenticated USING (public.app_role() IS NOT NULL);
+
+DROP POLICY IF EXISTS profiles_read ON profiles;
+CREATE POLICY profiles_read ON profiles FOR SELECT TO authenticated
+  USING (id = auth.uid() OR public.app_role() = 'admin');
+DROP POLICY IF EXISTS profiles_admin_write ON profiles;
+CREATE POLICY profiles_admin_write ON profiles FOR INSERT TO authenticated WITH CHECK (public.app_role() = 'admin');
+DROP POLICY IF EXISTS profiles_admin_update ON profiles;
+CREATE POLICY profiles_admin_update ON profiles FOR UPDATE TO authenticated
+  USING (public.app_role() = 'admin') WITH CHECK (public.app_role() = 'admin');
+
+DROP POLICY IF EXISTS stock_select ON stock_items;
+CREATE POLICY stock_select ON stock_items FOR SELECT TO authenticated USING (public.can_access_tenant(tenant_id));
+DROP POLICY IF EXISTS stock_insert ON stock_items;
+CREATE POLICY stock_insert ON stock_items FOR INSERT TO authenticated WITH CHECK (public.can_access_tenant(tenant_id));
+DROP POLICY IF EXISTS stock_update ON stock_items;
+CREATE POLICY stock_update ON stock_items FOR UPDATE TO authenticated
+  USING (public.can_access_tenant(tenant_id)) WITH CHECK (public.can_access_tenant(tenant_id));
+DROP POLICY IF EXISTS stock_delete ON stock_items;
+CREATE POLICY stock_delete ON stock_items FOR DELETE TO authenticated USING (public.can_access_tenant(tenant_id));
+
+DROP POLICY IF EXISTS sales_select ON sales;
+CREATE POLICY sales_select ON sales FOR SELECT TO authenticated USING (public.can_access_tenant(tenant_id));
+DROP POLICY IF EXISTS sale_lines_select ON sale_lines;
+CREATE POLICY sale_lines_select ON sale_lines FOR SELECT TO authenticated USING (public.can_access_tenant(tenant_id));
+
+-- Hak akses tabel: tanpa login (anon) tidak ada; pengguna login hanya yang diperlukan.
+REVOKE ALL ON tenants, profiles, stock_items, sales, sale_lines FROM anon, authenticated;
+GRANT SELECT ON tenants, sales, sale_lines TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON stock_items TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- checkout(): satu transaksi penjualan yang atomik.
+--   * kunci baris stok (FOR UPDATE), periksa cukup, kurangi stok, hitung total dari HARGA DI DATABASE,
+--     buat nomor transaksi, simpan header + baris, kembalikan struk sebagai jsonb.
+--   * Bila satu barang saja tidak cukup / tidak ada / belum berharga, tidak ada yang berubah.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.checkout(p_tenant text, p_method text, p_paid integer, p_lines jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_uid     uuid := auth.uid();
+  v_at      timestamptz := now();
+  v_cashier text;
+  v_total   bigint := 0;
+  v_count   integer;
+  v_found   integer := 0;
+  v_base    text;
+  v_no      text;
+  v_suffix  integer := 1;
+  v_paid    integer;
+  v_lines   jsonb := '[]'::jsonb;
+  r         record;
+BEGIN
+  IF v_uid IS NULL OR public.app_role() IS NULL THEN
+    RAISE EXCEPTION 'Akses ditolak.' USING ERRCODE = '42501';
+  END IF;
+  IF NOT public.can_access_tenant(p_tenant) THEN
+    RAISE EXCEPTION 'Tidak punya akses ke tenant ini.' USING ERRCODE = '42501';
+  END IF;
+  IF p_method NOT IN ('tunai', 'nontunai') THEN
+    RAISE EXCEPTION 'Metode bayar tidak valid.' USING ERRCODE = '22023';
+  END IF;
+  IF jsonb_typeof(p_lines) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Keranjang tidak valid.' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT count(*) INTO v_count FROM jsonb_array_elements(p_lines);
+  IF v_count < 1 OR v_count > 200
+     OR v_count <> (SELECT count(DISTINCT e->>'id') FROM jsonb_array_elements(p_lines) e)
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_lines) e
+                WHERE (e->>'id') IS NULL OR (e->>'qty') !~ '^[0-9]{1,7}$' OR (e->>'qty')::int < 1) THEN
+    RAISE EXCEPTION 'Keranjang tidak valid.' USING ERRCODE = '22023';
+  END IF;
+
+  FOR r IN
+    SELECT s.id, s.name, s.unit, s.qty, s.price, q.want
+    FROM public.stock_items s
+    JOIN (SELECT e->>'id' AS id, (e->>'qty')::int AS want FROM jsonb_array_elements(p_lines) e) q ON q.id = s.id
+    WHERE s.tenant_id = p_tenant
+    ORDER BY s.id
+    FOR UPDATE OF s
+  LOOP
+    v_found := v_found + 1;
+    IF r.price IS NULL THEN
+      RAISE EXCEPTION 'Harga "%" belum diisi.', r.name USING ERRCODE = 'P0001';
+    END IF;
+    IF r.qty < r.want THEN
+      RAISE EXCEPTION 'Stok "%" tinggal % %.', r.name, r.qty, r.unit USING ERRCODE = 'P0001';
+    END IF;
+    v_total := v_total + r.want::bigint * r.price;
+    v_lines := v_lines || jsonb_build_object('id', r.id, 'name', r.name, 'unit', r.unit, 'qty', r.want, 'price', r.price);
+  END LOOP;
+
+  IF v_found <> v_count THEN
+    RAISE EXCEPTION 'Ada barang yang sudah tidak ada di daftar stok.' USING ERRCODE = 'P0001';
+  END IF;
+  IF v_total < 1 OR v_total > 1000000000 THEN
+    RAISE EXCEPTION 'Total belanja tidak valid.' USING ERRCODE = '22023';
+  END IF;
+
+  v_paid := CASE WHEN p_method = 'tunai' THEN p_paid ELSE v_total::int END;
+  IF v_paid IS NULL OR v_paid < v_total THEN
+    RAISE EXCEPTION 'Uang diterima kurang dari total.' USING ERRCODE = 'P0001';
+  END IF;
+  IF v_paid > 1000000000 THEN
+    RAISE EXCEPTION 'Uang diterima terlalu besar.' USING ERRCODE = '22023';
+  END IF;
+
+  UPDATE public.stock_items s
+     SET qty = s.qty - q.want, updated_at = now()
+    FROM (SELECT e->>'id' AS id, (e->>'qty')::int AS want FROM jsonb_array_elements(p_lines) e) q
+   WHERE s.tenant_id = p_tenant AND s.id = q.id;
+
+  SELECT left(regexp_replace(name, '[^[:alnum:] .,''()&/+-]', '', 'g'), 60) INTO v_cashier
+    FROM public.profiles WHERE id = v_uid;
+  v_cashier := COALESCE(NULLIF(btrim(v_cashier), ''), 'Kasir');
+
+  -- Nomor: TRX-YYYYMMDD-HHMMSS (waktu Jakarta); bila bentrok di detik yang sama, akhiran -2, -3, ...
+  v_base := 'TRX-' || to_char(v_at AT TIME ZONE 'Asia/Jakarta', 'YYYYMMDD-HH24MISS');
+  LOOP
+    v_no := CASE WHEN v_suffix = 1 THEN v_base ELSE v_base || '-' || v_suffix END;
+    BEGIN
+      INSERT INTO public.sales (tenant_id, no, at, cashier, method, total, paid)
+      VALUES (p_tenant, v_no, v_at, v_cashier, p_method, v_total::int, v_paid);
+      EXIT;
+    EXCEPTION WHEN unique_violation THEN
+      v_suffix := v_suffix + 1;
+      IF v_suffix > 999 THEN RAISE EXCEPTION 'Gagal membuat nomor transaksi.' USING ERRCODE = 'P0001'; END IF;
+    END;
+  END LOOP;
+
+  INSERT INTO public.sale_lines (tenant_id, sale_no, item_id, name, unit, qty, price)
+  SELECT p_tenant, v_no, l->>'id', l->>'name', l->>'unit', (l->>'qty')::int, (l->>'price')::int
+    FROM jsonb_array_elements(v_lines) l;
+
+  RETURN jsonb_build_object('no', v_no, 'at', v_at, 'cashier', v_cashier, 'method', p_method,
+                            'total', v_total::int, 'paid', v_paid, 'lines', v_lines);
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- delete_app_user(): hapus akun (admin saja). Tidak boleh diri sendiri atau admin terakhir.
+-- Menghapus baris auth.users (profil ikut terhapus lewat ON DELETE CASCADE) agar username bisa dipakai lagi.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.delete_app_user(p_username text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_target public.profiles%ROWTYPE;
+BEGIN
+  IF public.app_role() IS DISTINCT FROM 'admin' THEN
+    RAISE EXCEPTION 'Akses ditolak. Fitur ini hanya untuk Admin.' USING ERRCODE = '42501';
+  END IF;
+  SELECT * INTO v_target FROM public.profiles WHERE username = lower(btrim(p_username));
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User tidak ditemukan.' USING ERRCODE = 'P0001';
+  END IF;
+  IF v_target.id = auth.uid() THEN
+    RAISE EXCEPTION 'Tidak bisa menghapus akun Anda sendiri.' USING ERRCODE = 'P0001';
+  END IF;
+  IF v_target.role = 'admin' AND (SELECT count(*) FROM public.profiles WHERE role = 'admin') <= 1 THEN
+    RAISE EXCEPTION 'Minimal harus ada satu Admin.' USING ERRCODE = 'P0001';
+  END IF;
+  DELETE FROM auth.users WHERE id = v_target.id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.checkout(text, text, integer, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.checkout(text, text, integer, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.delete_app_user(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.delete_app_user(text) TO authenticated;
+REVOKE ALL ON FUNCTION public.app_role(), public.app_tenant(), public.can_access_tenant(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.app_role(), public.app_tenant(), public.can_access_tenant(text) TO authenticated;
+
+COMMIT;

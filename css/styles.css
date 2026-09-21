@@ -2006,65 +2006,6 @@ ul { list-style: none; }
   display: block;
 }
 
-.login-divider {
-  margin: var(--space-6) 0 var(--space-4);
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: 13px;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.login-divider::before,
-.login-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border-subtle);
-}
-
-.demo-users {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.demo-user {
-  padding: var(--space-3);
-  background: var(--bg-surface-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-}
-
-.demo-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: var(--space-1);
-}
-
-.demo-cred {
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-  background: var(--bg-surface);
-  padding: var(--space-1) var(--space-2);
-  border-radius: 4px;
-  display: block;
-  word-break: break-word;
-}
-
-.login-note {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: center;
-  margin: 0;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-}
-
 [data-theme="dark"] .login-container {
   background: linear-gradient(135deg, #003D73 0%, #001F3F 100%);
 }
@@ -2877,3 +2818,22 @@ ul { list-style: none; }
 [data-theme="dark"] .stt-badge.is-menipis { color: #F5C84B; background: rgba(224, 161, 0, 0.18); }
 [data-theme="dark"] .stt-badge.is-habis { color: #FF9C9C; background: rgba(214, 69, 69, 0.2); }
 .stt-empty { padding: 24px 8px; font-size: 13px; text-align: center; color: var(--text-muted); }
+
+/* ============ STATUS KONEKSI DATABASE (menu burger) ============ */
+.sheet-item[data-tone] .sheet-item-icon { position: relative; }
+.sheet-item[data-tone] .sheet-item-icon::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-surface);
+  background: #9AA3AF;
+}
+.sheet-item[data-tone="ok"] .sheet-item-icon::after { background: #1FA35B; }
+.sheet-item[data-tone="bad"] .sheet-item-icon::after { background: #D64545; }
+.sheet-item[data-tone="wait"] .sheet-item-icon::after { animation: dbPulse 1s ease-in-out infinite; }
+@keyframes dbPulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .sheet-item[data-tone="wait"] .sheet-item-icon::after { animation: none; } }
