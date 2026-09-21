@@ -10,6 +10,7 @@ import { renderStokAwalPage, initStokAwalPage } from './pages/stok-awal.js';
 import { renderHargaPage, initHargaPage } from './pages/update-harga.js';
 import { renderTransaksiPage, initTransaksiPage } from './pages/transaksi.js';
 import { renderStokKeluarPage, initStokKeluarPage } from './pages/stok-keluar.js';
+import { renderStokTotalPage, initStokTotalPage } from './pages/stok-total.js';
 import { SalesStore } from './sales.js';
 import { StockStore } from './stock.js';
 import { registerServiceWorker, watchConnectivity, isOnline, isOfflineReady, clearAppCache } from './pwa.js';
@@ -84,9 +85,8 @@ if (bottomNav) {
       items: [
         { id: '/stok/awal', label: 'Stok Awal', desc: 'Input & lihat stok awal periode', icon: SHEET_ICONS.box },
         { id: '/stok/keluar-laku', label: 'Stok Keluar (Laku)', desc: 'Stok keluar akibat penjualan', icon: SHEET_ICONS.box },
-        { id: '/stok/keluar-mutasi', label: 'Stok Keluar (Mutasi)', desc: 'Mutasi antar cabang/gudang', icon: SHEET_ICONS.box },
         { id: '/stok/retur', label: 'Stok Retur', desc: 'Proses & laporan retur barang', icon: SHEET_ICONS.box },
-        { id: '/stok/total', label: 'Stok Total', desc: 'Rekap stok seluruh SKU', icon: SHEET_ICONS.box }
+        { id: '/stok/total', label: 'Stok Total', desc: 'Sisa stok terakhir setelah transaksi', icon: SHEET_ICONS.box }
       ]
     });
     if (sel) navigate(sel.id);
@@ -232,9 +232,8 @@ router
   .add('/pengaturan', () => { setTimeout(initSettingsPage, 150); return settingsPage(); })
   .add('/stok/awal', () => { setTimeout(initStokAwalPage, 150); return renderStokAwalPage(); })
   .add('/stok/keluar-laku', () => { setTimeout(initStokKeluarPage, 150); return renderStokKeluarPage(); })
-  .add('/stok/keluar-mutasi', () => placeholderPage('Stok Keluar — Mutasi', 'Laporan mutasi antar cabang/gudang.'))
   .add('/stok/retur', () => placeholderPage('Stok Retur', 'Proses dan laporan retur barang.'))
-  .add('/stok/total', () => placeholderPage('Stok Total', 'Rekap stok keseluruhan semua SKU.'))
+  .add('/stok/total', () => { setTimeout(initStokTotalPage, 150); return renderStokTotalPage(); })
   .add('/harga', () => { setTimeout(initHargaPage, 150); return renderHargaPage(); })
   .add('/laporan-kasir', () => placeholderPage('Laporan Kasir', 'Preview dan cetak laporan kasir harian.'))
   .add('/gudang', () => placeholderPage('Gudang', 'Manajemen inventori gudang pusat.'))
