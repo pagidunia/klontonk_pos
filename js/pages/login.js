@@ -45,31 +45,6 @@ export function renderLogin() {
           <div class="login-error" id="loginError"></div>
         </form>
 
-        <div class="login-divider">
-          <span>Akun Demo</span>
-        </div>
-
-        <div class="demo-users">
-          <div class="demo-user">
-            <div class="demo-label">Pusat</div>
-            <code class="demo-cred">admin</code>
-            <code class="demo-cred">admin123</code>
-          </div>
-          <div class="demo-user">
-            <div class="demo-label">Warung Merah</div>
-            <code class="demo-cred">kasir_merah</code>
-            <code class="demo-cred">kasir123</code>
-          </div>
-          <div class="demo-user">
-            <div class="demo-label">Warung Putih</div>
-            <code class="demo-cred">kasir_putih</code>
-            <code class="demo-cred">kasir123</code>
-          </div>
-        </div>
-
-        <p class="login-note">
-          💡 User demo siap pakai untuk testing
-        </p>
       </div>
     </div>
   `;

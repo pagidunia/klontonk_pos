@@ -38,7 +38,7 @@ export function isOfflineReady() {
   return 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
 }
 
-// Hapus cache aplikasi (BUKAN data akun/stok di localStorage).
+// Hapus cache aplikasi (BUKAN data akun/stok, yang ada di database).
 // Lewat service worker bila aktif; jika tidak, hapus langsung dari halaman.
 export async function clearAppCache() {
   const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;

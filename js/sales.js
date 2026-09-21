@@ -1,90 +1,44 @@
 import { TenantStore } from './tenant.js';
-import { trxNumber } from './cart.js';
+import { StockStore } from './stock.js';
+import { rpc, fetchAll } from './supabase.js';
 
-// Riwayat penjualan per tenant. Sumber datanya blok SALES_DATA di bawah (tanpa Local Storage).
-// Setiap penjualan baru dikirim ke server.mjs (PUT api/sales) yang menulis ulang blok itu di file ini.
-// Jangan hapus penanda BEGIN/END SALES_DATA. Validasi diulang di server.mjs.
+// Riwayat penjualan per tenant, disimpan di tabel `sales` + `sale_lines` di Supabase (db/schema.sql).
+// Di browser hanya ada salinan yang dimuat saat aplikasi dibuka (SalesStore.load), dipakai laporan
+// Stok Keluar — Laku. Penjualan baru dicatat HANYA lewat checkout(): satu fungsi di database yang
+// mengunci stok, memeriksa cukup, mengurangi stok, menghitung total dari harga di database, membuat
+// nomor transaksi, dan menyimpan penjualannya dalam satu transaksi (semua berhasil atau semua batal).
 //
 // Bentuk satu penjualan:
 //   { no, at (ISO 8601), cashier, method: 'tunai' | 'nontunai', total, paid,
 //     lines: [{ id, name, unit, qty, price }] }
-const SAVE_URL = 'api/sales';
-const MAX_SALES_PER_TENANT = 20000;
+const SELECT = 'tenant_id,no,at,cashier,method,total,paid,lines:sale_lines(item_id,name,unit,qty,price)';
 
-// BEGIN SALES_DATA
-const SALES_DATA = {
-  "T001": [
-    {
-      "no": "TRX-20260920-164748",
-      "at": "2026-09-20T09:47:48.944Z",
-      "cashier": "Admin Pusat",
-      "method": "tunai",
-      "total": 325000,
-      "paid": 325000,
-      "lines": [
-        {
-          "id": "stk_seed_0",
-          "name": "Beras Lahap",
-          "unit": "kg",
-          "qty": 5,
-          "price": 65000
-        }
-      ]
-    }
-  ]
-};
-// END SALES_DATA
+let data = {}; // { T001: [sale...], ... } — salinan dari database
 
-let data = structuredClone(SALES_DATA);
-let saveChain = Promise.resolve();
-const saveErrorHandlers = new Set();
+const isoMillis = (at) => String(at).replace(/(\.\d{3})\d+/, '$1');
 
 const currentSales = () => data[TenantStore.getCurrent().id] || [];
 
-async function saveAll() {
-  let response;
-  try {
-    response = await fetch(SAVE_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-  } catch (e) {
-    throw new Error('Server penyimpanan tidak terjangkau (offline?).');
-  }
-  if (response.ok) return;
-  if (response.status === 404 || response.status === 405) {
-    throw new Error('Server penyimpanan belum aktif atau belum diperbarui. Jalankan ulang "node server.mjs".');
-  }
-  throw new Error(`Server menolak data penjualan (kode ${response.status}).`);
-}
+const toSale = ({ no, at, cashier, method, total, paid, lines }) => ({
+  no, at: isoMillis(at), cashier, method, total, paid,
+  lines: lines.map(({ item_id, name, unit, qty, price }) => ({ id: item_id, name, unit, qty, price }))
+});
 
-// Simpan diserialkan; data terbaru dikirim tiap giliran sehingga simpan beruntun tidak saling menimpa.
-function persist() {
-  saveChain = saveChain
-    .then(saveAll)
-    .catch((err) => {
-      const message = `${err.message} Riwayat penjualan belum tersimpan ke js/sales.js dan hilang saat refresh.`;
-      saveErrorHandlers.forEach((handler) => handler(message));
-    });
-}
-
-// Nomor unik: bila dua penjualan jatuh di detik yang sama, tambahkan akhiran -2, -3, ...
-function uniqueNumber(date, existing) {
-  const base = trxNumber(date);
-  const taken = new Set(existing.map((sale) => sale.no));
-  if (!taken.has(base)) return base;
-  for (let n = 2; n < 1000; n++) {
-    if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
-  }
-  return `${base}-${Date.now() % 1000}`;
+function describe(result) {
+  if (result.expired) return 'Sesi berakhir. Silakan login ulang.';
+  if (result.status === 403 || result.code === '42501') return 'Tidak punya akses untuk transaksi ini.';
+  return result.message;
 }
 
 export const SalesStore = {
-  // Dipanggil bila data gagal ditulis ke js/sales.js; mengembalikan fungsi untuk berhenti mendengarkan.
-  onSaveError(handler) {
-    saveErrorHandlers.add(handler);
-    return () => saveErrorHandlers.delete(handler);
+  // Muat riwayat penjualan (RLS: admin semua tenant, kasir hanya tenant sendiri).
+  async load() {
+    const result = await fetchAll(`sales?select=${SELECT}&order=at.asc,no.asc`);
+    if (!result.ok) return { success: false, error: describe(result), expired: !!result.expired };
+    const grouped = Object.fromEntries(TenantStore.getAll().map((tenant) => [tenant.id, []]));
+    for (const row of result.data) (grouped[row.tenant_id] ||= []).push(toSale(row));
+    data = grouped;
+    return { success: true };
   },
 
   // Penjualan tenant aktif (salinan), urutan tercatat.
@@ -92,31 +46,21 @@ export const SalesStore = {
     return structuredClone(currentSales());
   },
 
-  // Catat satu penjualan. input: { cashier, method, total, paid, lines }.
-  record(input) {
-    const existing = currentSales();
-    if (!input || !Array.isArray(input.lines) || input.lines.length === 0) {
-      return { success: false, error: 'Penjualan tanpa barang tidak dicatat.' };
-    }
-    if (existing.length >= MAX_SALES_PER_TENANT) {
-      return { success: false, error: 'Riwayat penjualan penuh.' };
-    }
+  // Proses pembayaran. input: { method, paid, lines: [{ id, qty }, ...] }.
+  // Mengembalikan { success: true, sale } (sale dari database, lengkap dengan nomor & total) atau { success: false, error }.
+  async checkout({ method, paid, lines }) {
+    const tenant = TenantStore.getCurrent().id;
+    const result = await rpc('checkout', {
+      p_tenant: tenant,
+      p_method: method,
+      p_paid: paid,
+      p_lines: lines.map(({ id, qty }) => ({ id, qty }))
+    });
+    if (!result.ok) return { success: false, error: describe(result) };
 
-    const now = new Date();
-    // Nama kasir dibersihkan agar cocok dengan aturan validasi server.
-    const cashier = String(input.cashier ?? '').replace(/[^\p{L}\p{N} .,'()&/+-]/gu, '').trim().slice(0, 60) || 'Kasir';
-    const sale = {
-      no: uniqueNumber(now, existing),
-      at: now.toISOString(),
-      cashier,
-      method: input.method,
-      total: input.total,
-      paid: input.paid,
-      lines: input.lines.map(({ id, name, unit, qty, price }) => ({ id, name, unit, qty, price }))
-    };
-
-    data = { ...data, [TenantStore.getCurrent().id]: [...existing, sale] };
-    persist();
+    const sale = { ...result.data, at: isoMillis(result.data.at) };
+    data = { ...data, [tenant]: [...(data[tenant] || []), sale] };
+    StockStore.applySale(sale.lines);
     return { success: true, sale: structuredClone(sale) };
   }
 };

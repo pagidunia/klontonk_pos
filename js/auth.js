@@ -1,26 +1,23 @@
 import { UI } from './ui.js';
+import { EMAIL_DOMAIN } from './config.js';
+import { rest, rpc, signIn, signOut, signUpDetached, hasSession, clearSession } from './supabase.js';
 
 // ============ AUTHENTICATION SYSTEM ============
 //
-// SECURITY NOTES:
-// - Password TIDAK pernah disimpan dalam bentuk plaintext.
-//   Disimpan sebagai SHA-256(salt + password) dengan salt acak per-user (Web Crypto API).
-// - Session ditandatangani (integrity signature) dengan device key acak,
-//   sehingga manipulasi manual localStorage (mis. mengubah role jadi admin) terdeteksi & ditolak.
-// - Rate limiting: setelah beberapa percobaan gagal, login terkunci sementara (exponential backoff).
-// - Pesan error login selalu generik untuk mencegah user enumeration.
+// Login memakai Supabase Auth (email + password); username dipetakan ke <username>@klontonk.local.
+// Peran dan tenant tiap akun ada di tabel `profiles`. Keputusan akses dijaga oleh RLS di database
+// (db/schema.sql); pengecekan di sini hanya untuk tampilan dan bisa dilewati siapa pun.
 //
-// CATATAN PRODUKSI: ini masih client-side (demo/offline).
-// Untuk produksi nyata, pindahkan autentikasi ke backend (bcrypt/argon2 + httpOnly cookie).
+// - Password TIDAK pernah disimpan di aplikasi maupun tabel kita; hash dikelola Supabase Auth.
+// - Token akses dipegang js/supabase.js dan diperbarui otomatis.
+// - Session tampilan (nama, peran, tenant) ditandatangani device key acak agar edit manual localStorage terdeteksi.
+// - Rate limiting: di browser (exponential backoff) dan di Supabase Auth.
+// - Pesan error login selalu generik untuk mencegah user enumeration.
+// - Sesi yang sudah masuk tetap dibuka saat offline; login baru butuh koneksi.
 
-// Seed awal — password hanya dipakai sekali saat seeding, lalu di-hash.
-const SEED_USERS = [
-  { id: 'usr_001', username: 'admin',       password: 'admin123', name: 'Admin Pusat',        role: 'admin',   avatar: 'A', tenant: 'T001' },
-  { id: 'usr_002', username: 'kasir_merah', password: 'kasir123', name: 'Kasir Warung Merah', role: 'cashier', avatar: 'K', tenant: 'T002' },
-  { id: 'usr_003', username: 'kasir_putih', password: 'kasir123', name: 'Kasir Warung Putih', role: 'cashier', avatar: 'K', tenant: 'T003' }
-];
+const USERNAME_PATTERN = /^[a-z0-9_.]{3,24}$/;
+const PROFILE_COLUMNS = 'id,username,name,role,avatar,tenant:tenant_id';
 
-const USERS_KEY = 'klontonk:users';       // { username: {id,username,salt,hash,name,role,avatar,tenant} }
 const SESSION_KEY = 'klontonk_session';
 const ACTIVITY_KEY = 'klontonk_last_activity';
 const DEVICE_KEY_NAME = 'klontonk:devicekey';
@@ -126,7 +123,6 @@ class AuthManager {
     this.currentUser = null;
     this.updateActivityBound = this.updateActivity.bind(this);
     this.timeoutInterval = null;
-    this._seeding = null; // promise cache agar seeding hanya jalan sekali
     // _loadSession bersifat async (verifikasi signature) — status login hanya
     // VALID setelah app.js menunggu Auth.ready. Ini mencegah race condition
     // yang membuat user selalu "dilempar kembali" ke halaman login.
@@ -144,62 +140,6 @@ class AuthManager {
       this.setupActivityListeners();
       this.startTimeoutCheck();
     }
-  }
-
-  // ============ Password Hashing ============
-  // SHA-256(salt + password) — salt acak per-user mencegah rainbow table
-  async _hashPassword(password, salt) {
-    return _sha256(salt + ':' + password);
-  }
-
-  // ============ User Store (dengan seeding lazy) ============
-  async _getUsers() {
-    await this._ensureSeeded();
-    try {
-      return JSON.parse(_storageGet(USERS_KEY) || '{}');
-    } catch (e) {
-      return {};
-    }
-  }
-
-  _saveUsers(users) {
-    _storageSet(USERS_KEY, JSON.stringify(users));
-  }
-
-  // Seed akun demo pertama kali — password langsung di-hash, plaintext tidak disimpan.
-  // Data korup/tidak-valid otomatis di-reseed agar app tidak pernah "terkunci".
-  _ensureSeeded() {
-    if (this._seeding) return this._seeding;
-    this._seeding = (async () => {
-      let existing = null;
-      try {
-        existing = JSON.parse(_storageGet(USERS_KEY) || 'null');
-      } catch (e) {
-        existing = null;
-      }
-      const valid = existing && typeof existing === 'object' && Object.keys(existing).length > 0;
-      if (valid) return; // sudah ada data user yang sehat
-
-      if (_storageGet(USERS_KEY)) {
-        console.warn('[Auth] Data user korup/kosong — re-seed akun demo.');
-      }
-      const users = {};
-      for (const u of SEED_USERS) {
-        const salt = _randomSalt();
-        users[u.username] = {
-          id: u.id,
-          username: u.username,
-          salt,
-          hash: await this._hashPassword(u.password, salt),
-          name: u.name,
-          role: u.role,
-          avatar: u.avatar,
-          tenant: u.tenant
-        };
-      }
-      this._saveUsers(users);
-    })();
-    return this._seeding;
   }
 
   // ============ Device Key (integritas session) ============
@@ -282,6 +222,12 @@ class AuthManager {
         return;
       }
 
+      // Tanpa sesi Supabase, data tidak bisa diambil: minta login ulang.
+      if (!hasSession()) {
+        this._clearSession();
+        return;
+      }
+
       // Verifikasi integritas — tolak session yang dimodifikasi manual
       const { _sig, ...sessionData } = data;
       const expected = await this._signSession(sessionData);
@@ -301,6 +247,7 @@ class AuthManager {
     this.currentUser = null;
     _storageRemove(SESSION_KEY);
     _storageRemove(ACTIVITY_KEY);
+    clearSession();
   }
 
   // Update aktivitas terakhir (dengan throttle 5 detik agar efisien)
@@ -374,25 +321,31 @@ class AuthManager {
       };
     }
 
-    // Delay acak kecil untuk meratakan timing response (anti timing attack)
-    const minLen = Math.min(String(username || '').length, 64);
-    await new Promise(r => setTimeout(r, 200 + Math.floor(Math.random() * 150) + minLen));
-
-    const users = await this._getUsers();
-    const user = users[username];
-
-    // Selalu jalankan hashing meski user tidak ada — timing konsisten
-    const salt = user ? user.salt : _randomSalt();
-    const attemptHash = await this._hashPassword(password, salt);
-    const valid = !!user && this._timingSafeEqual(attemptHash, user.hash);
-
-    if (!valid) {
+    const uname = String(username || '').trim().toLowerCase();
+    if (!USERNAME_PATTERN.test(uname) || !password) {
       this._recordFailedAttempt();
       return { success: false, error: 'Username atau password salah.' };
     }
 
+    const result = await signIn(`${uname}@${EMAIL_DOMAIN}`, String(password));
+    if (!result.ok) {
+      if (result.status === 429) return { success: false, error: 'Terlalu banyak percobaan. Coba lagi beberapa saat.', locked: true };
+      if (result.status === 0) return { success: false, error: result.message };
+      if (result.status >= 500) return { success: false, error: 'Layanan sedang bermasalah. Coba lagi sebentar.' };
+      this._recordFailedAttempt();
+      return { success: false, error: 'Username atau password salah.' };
+    }
+
+    // Akun Supabase Auth tanpa profil (mis. mendaftar sendiri) tidak punya akses apa pun.
+    const found = await rest(`profiles?select=${PROFILE_COLUMNS}&id=eq.${result.data.user.id}`);
+    if (!found.ok || !found.data.length) {
+      await signOut();
+      return { success: false, error: found.ok ? 'Akun ini belum diberi akses. Hubungi admin.' : found.message };
+    }
+
     // Sukses — reset throttle
     this._resetThrottle();
+    const user = found.data[0];
 
     const sessionData = {
       id: user.id,
@@ -412,16 +365,6 @@ class AuthManager {
     return { success: true, user: this.currentUser };
   }
 
-  // Perbandingan konstanta-waktu — mencegah timing attack pada hash check
-  _timingSafeEqual(a, b) {
-    if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
-    let diff = 0;
-    for (let i = 0; i < a.length; i++) {
-      diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-    }
-    return diff === 0;
-  }
-
   // ============ Manajemen User (ADMIN ONLY) ============
   _requireAdmin() {
     if (!this.currentUser || this.currentUser.role !== 'admin') {
@@ -430,106 +373,73 @@ class AuthManager {
     return { ok: true };
   }
 
-  // Daftar user (safe fields — tanpa hash/salt) — admin only
+  // Hasil panggilan Supabase → bentuk { success, ... } yang dipakai halaman.
+  _adminResult(result, onOk) {
+    if (result.ok) return { success: true, ...onOk(result.data) };
+    if (result.expired) return { success: false, expired: true, error: 'Sesi berakhir. Silakan login ulang.' };
+    if (result.status === 403 || result.code === '42501') return { success: false, error: 'Akses ditolak. Fitur ini hanya untuk Admin.' };
+    return { success: false, error: result.message };
+  }
+
+  // Daftar user — admin only (RLS: kasir hanya melihat profilnya sendiri)
   async listUsers() {
     const guard = this._requireAdmin();
     if (!guard.ok) return { success: false, error: guard.error };
-    const users = await this._getUsers();
-    return {
-      success: true,
-      users: Object.values(users).map(u => ({
-        id: u.id,
-        username: u.username,
-        name: u.name,
-        role: u.role,
-        avatar: u.avatar,
-        tenant: u.tenant
-      }))
-    };
+    const result = await rest(`profiles?select=${PROFILE_COLUMNS}&order=created_at,username`);
+    return this._adminResult(result, (data) => ({ users: data }));
   }
 
-  // Tambah user baru — admin only, dengan validasi & sanitasi input ketat
+  // Tambah user — admin only. Akun dibuat lewat signUp terpisah (sesi admin tidak berubah), lalu profilnya
+  // ditulis admin. Akun tanpa profil tidak punya akses apa pun, jadi kegagalan di tengah jalan aman.
   async createUser({ username, password, name, role = 'cashier', tenant = 'T001' } = {}) {
     const guard = this._requireAdmin();
     if (!guard.ok) return { success: false, error: guard.error };
 
     const uname = String(username || '').trim().toLowerCase();
+    const fullName = String(name || '').trim();
+    const fail = (error) => ({ success: false, error });
 
-    if (!uname || !password || !String(name || '').trim()) {
-      return { success: false, error: 'Semua field wajib diisi.' };
-    }
-    if (!/^[a-z0-9_.]{3,24}$/.test(uname)) {
-      return { success: false, error: 'Username 3–24 karakter, hanya huruf kecil, angka, titik, underscore.' };
-    }
-    if (String(name).trim().length > 60) {
-      return { success: false, error: 'Nama maksimal 60 karakter.' };
-    }
-    if (typeof password !== 'string' || password.length < 8) {
-      return { success: false, error: 'Password minimal 8 karakter.' };
-    }
-    if (password.length > 128) {
-      return { success: false, error: 'Password maksimal 128 karakter.' };
-    }
-    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-      return { success: false, error: 'Password harus mengandung huruf dan angka.' };
-    }
-    if (password.toLowerCase().includes(uname)) {
-      return { success: false, error: 'Password tidak boleh mengandung username.' };
-    }
-    if (!['admin', 'cashier'].includes(role)) {
-      return { success: false, error: 'Role tidak valid.' };
-    }
-    if (!/^T\d{3}$/.test(String(tenant))) {
-      return { success: false, error: 'Tenant tidak valid.' };
+    if (!uname || !password || !fullName) return fail('Semua field wajib diisi.');
+    if (!USERNAME_PATTERN.test(uname)) return fail('Username 3–24 karakter, hanya huruf kecil, angka, titik, underscore.');
+    if (fullName.length > 60) return fail('Nama maksimal 60 karakter.');
+    if (typeof password !== 'string' || password.length < 8) return fail('Password minimal 8 karakter.');
+    if (password.length > 128) return fail('Password maksimal 128 karakter.');
+    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) return fail('Password harus mengandung huruf dan angka.');
+    if (password.toLowerCase().includes(uname)) return fail('Password tidak boleh mengandung username.');
+    if (!['admin', 'cashier'].includes(role)) return fail('Role tidak valid.');
+    if (!/^T\d{3}$/.test(String(tenant))) return fail('Tenant tidak valid.');
+
+    const taken = await rest(`profiles?select=id&username=eq.${uname}`);
+    if (!taken.ok) return this._adminResult(taken, () => ({}));
+    if (taken.data.length) return fail('Username sudah digunakan.');
+
+    const signUp = await signUpDetached(`${uname}@${EMAIL_DOMAIN}`, password);
+    if (!signUp.ok) {
+      if (signUp.code === 'user_already_exists' || signUp.status === 422 || /duplicate|already/i.test(signUp.message)) {
+        return fail('Username ini sudah pernah dipakai. Gunakan username lain.');
+      }
+      return fail(signUp.message);
     }
 
-    const users = await this._getUsers();
-
-    if (users[uname]) {
-      return { success: false, error: 'Username sudah digunakan.' };
-    }
-
-    const salt = _randomSalt();
-    const id = 'usr_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
-
-    users[uname] = {
-      id,
+    const profile = {
+      id: signUp.data.user.id,
       username: uname,
-      salt,
-      hash: await this._hashPassword(password, salt),
-      name: String(name).trim(),
+      name: fullName,
       role,
-      avatar: String(name).trim().charAt(0).toUpperCase(),
-      tenant: String(tenant)
+      avatar: Array.from(fullName)[0].toUpperCase(),
+      tenant_id: String(tenant)
     };
-
-    this._saveUsers(users);
-    return { success: true, user: { id, username: uname, name: users[uname].name, role, tenant: String(tenant) } };
+    const saved = await rest('profiles', { method: 'POST', body: profile, headers: { Prefer: 'return=minimal' } });
+    if (!saved.ok) return this._adminResult(saved, () => ({}));
+    return { success: true, user: { id: profile.id, username: uname, name: fullName, role, avatar: profile.avatar, tenant: profile.tenant_id } };
   }
 
-  // Hapus user — admin only. Tidak boleh hapus diri sendiri / admin terakhir.
+  // Hapus user — admin only. Database menolak hapus diri sendiri / admin terakhir.
   async deleteUser(username) {
     const guard = this._requireAdmin();
     if (!guard.ok) return { success: false, error: guard.error };
-
-    const users = await this._getUsers();
     const uname = String(username || '').trim().toLowerCase();
-
-    if (!users[uname]) {
-      return { success: false, error: 'User tidak ditemukan.' };
-    }
-    if (this.currentUser && uname === this.currentUser.username) {
-      return { success: false, error: 'Tidak bisa menghapus akun Anda sendiri.' };
-    }
-
-    const admins = Object.values(users).filter(u => u.role === 'admin');
-    if (users[uname].role === 'admin' && admins.length <= 1) {
-      return { success: false, error: 'Minimal harus ada satu Admin.' };
-    }
-
-    delete users[uname];
-    this._saveUsers(users);
-    return { success: true };
+    return this._adminResult(await rpc('delete_app_user', { p_username: uname }), () => ({}));
   }
 
   // Logout
@@ -537,6 +447,7 @@ class AuthManager {
     this.currentUser = null;
     localStorage.removeItem('klontonk_session');
     localStorage.removeItem('klontonk_last_activity');
+    signOut();
     if (this.timeoutInterval) {
       clearInterval(this.timeoutInterval);
     }

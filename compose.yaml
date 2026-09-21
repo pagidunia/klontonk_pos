@@ -1,14 +1,13 @@
-# Jalankan:  podman compose up -d --build      Hentikan:  podman compose down
+# Jalankan:  podman compose up -d      Hentikan:  podman compose down
+# Hanya menyajikan file statis di http://localhost:8080 (localhost dianggap aman oleh browser, jadi kamera scan jalan).
 services:
   pos:
-    build:
-      context: .
-      dockerfile: Containerfile
+    image: public.ecr.aws/nginx/nginx:alpine
     container_name: klontonk-pos
     restart: always
     ports:
-      # Hanya bisa diakses dari komputer ini; localhost dianggap aman oleh browser (kamera scan).
-      - "127.0.0.1:8080:8080"
+      # Hanya bisa diakses dari komputer ini.
+      - "127.0.0.1:8080:80"
     volumes:
-      # Folder utuh (bukan satu file): server menulis stock.js lewat file sementara lalu rename.
-      - ./:/app
+      - ./:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
