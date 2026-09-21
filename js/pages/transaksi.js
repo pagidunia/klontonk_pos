@@ -1,7 +1,6 @@
 import { StockStore } from '../stock.js';
 import { SalesStore } from '../sales.js';
 import { TenantStore } from '../tenant.js';
-import { Auth } from '../auth.js';
 import { UI } from '../ui.js';
 import { scanBarcode } from '../scanner.js';
 import {

@@ -32,7 +32,7 @@ function loadZxing() {
 
 // Mengembalikan { engine, detect(source) }. detect() menghasilkan teks barcode atau null.
 // `source` boleh <video>, <canvas>, atau <img>.
-export async function createBarcodeDetector({ preferNative = true } = {}) {
+async function createBarcodeDetector({ preferNative = true } = {}) {
   if (preferNative && 'BarcodeDetector' in window) {
     try {
       const supported = await window.BarcodeDetector.getSupportedFormats();

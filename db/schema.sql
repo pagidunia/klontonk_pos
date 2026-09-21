@@ -1,4 +1,4 @@
--- Skema database Klontonk POS (PostgreSQL / Supabase): akun, stok, dan penjualan.
+-- Skema database Klontonk POS (PostgreSQL / Supabase): akun, stok, penjualan, dan retur.
 -- Dijalankan sekali di SQL Editor Supabase (atau lewat psql). Aman diulang (IF NOT EXISTS / OR REPLACE).
 --
 -- MODEL KEAMANAN
@@ -10,20 +10,23 @@
 
 BEGIN;
 
+-- Migrasi dari versi lama: kolom dan fungsi yang tidak pernah dipakai aplikasi. Tidak berpengaruh di database baru.
+ALTER TABLE IF EXISTS tenants     DROP COLUMN IF EXISTS code, DROP COLUMN IF EXISTS created_at;
+ALTER TABLE IF EXISTS stock_items DROP COLUMN IF EXISTS updated_at;
+DROP FUNCTION IF EXISTS public.app_tenant();
+
 -- ---------------------------------------------------------------------------
 -- Tenant (cabang) — sama dengan TenantStore._tenants di js/tenant.js.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenants (
-  id          text PRIMARY KEY CHECK (id ~ '^T[0-9]{3}$'),
-  name        text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60),
-  code        text NOT NULL UNIQUE CHECK (code ~ '^[A-Z]{1,4}$'),
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id    text PRIMARY KEY CHECK (id ~ '^T[0-9]{3}$'),
+  name  text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60)
 );
 
-INSERT INTO tenants (id, name, code) VALUES
-  ('T001', 'Pusat',        'TP'),
-  ('T002', 'Warung Merah', 'WM'),
-  ('T003', 'Warung Putih', 'WP')
+INSERT INTO tenants (id, name) VALUES
+  ('T001', 'Pusat'),
+  ('T002', 'Warung Merah'),
+  ('T003', 'Warung Putih')
 ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
@@ -52,7 +55,6 @@ CREATE TABLE IF NOT EXISTS stock_items (
   barcode    text CHECK (barcode IS NULL OR barcode ~ '^[A-Za-z0-9._-]{4,40}$'),
   price      integer CHECK (price IS NULL OR price BETWEEN 1 AND 100000000),
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS stock_items_name_uq    ON stock_items (tenant_id, lower(name));
@@ -86,16 +88,34 @@ CREATE TABLE IF NOT EXISTS sale_lines (
 );
 
 -- ---------------------------------------------------------------------------
--- Pembantu RLS: peran dan tenant pemanggil, dibaca dari profil (bukan dari token).
+-- Retur stok. kind = 'pelanggan' (barang kembali ke stok, ada pengembalian uang) atau
+-- 'supplier' (barang rusak / kedaluwarsa keluar dari stok, tanpa uang). Diisi hanya oleh process_return().
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS stock_returns (
+  tenant_id  text NOT NULL REFERENCES tenants (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  no         text NOT NULL CHECK (no ~ '^RTR-[0-9]{8}-[0-9]{6}(-[0-9]{1,3})?$'),
+  at         timestamptz NOT NULL DEFAULT now(),
+  cashier    text NOT NULL CHECK (char_length(cashier) BETWEEN 1 AND 60),
+  kind       text NOT NULL CHECK (kind IN ('pelanggan', 'supplier')),
+  item_id    text NOT NULL,
+  name       text NOT NULL,
+  unit       text NOT NULL,
+  qty        integer NOT NULL CHECK (qty BETWEEN 1 AND 1000000),
+  amount     integer NOT NULL DEFAULT 0 CHECK (amount BETWEEN 0 AND 1000000000),
+  reason     text NOT NULL CHECK (reason IN ('rusak', 'kedaluwarsa', 'salah_barang', 'tidak_sesuai', 'lainnya')),
+  note       text CHECK (note IS NULL OR char_length(note) <= 100),
+  PRIMARY KEY (tenant_id, no)
+);
+CREATE INDEX IF NOT EXISTS stock_returns_at_idx   ON stock_returns (tenant_id, at DESC);
+CREATE INDEX IF NOT EXISTS stock_returns_item_idx ON stock_returns (tenant_id, item_id, kind);
+
+-- ---------------------------------------------------------------------------
+-- Pembantu RLS: peran pemanggil dan akses tenant, dibaca dari profil (bukan dari token).
 -- SECURITY DEFINER agar bisa membaca `profiles` tanpa terkena RLS-nya sendiri.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.app_role() RETURNS text
   LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
 AS $$ SELECT role FROM public.profiles WHERE id = auth.uid() $$;
-
-CREATE OR REPLACE FUNCTION public.app_tenant() RETURNS text
-  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
-AS $$ SELECT tenant_id FROM public.profiles WHERE id = auth.uid() $$;
 
 -- Boleh mengakses data tenant tertentu: admin semua tenant, kasir hanya tenant sendiri.
 CREATE OR REPLACE FUNCTION public.can_access_tenant(t text) RETURNS boolean
@@ -110,6 +130,7 @@ ALTER TABLE profiles    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sale_lines  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_returns ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenants_read ON tenants;
 CREATE POLICY tenants_read ON tenants FOR SELECT TO authenticated USING (public.app_role() IS NOT NULL);
@@ -138,9 +159,12 @@ CREATE POLICY sales_select ON sales FOR SELECT TO authenticated USING (public.ca
 DROP POLICY IF EXISTS sale_lines_select ON sale_lines;
 CREATE POLICY sale_lines_select ON sale_lines FOR SELECT TO authenticated USING (public.can_access_tenant(tenant_id));
 
+DROP POLICY IF EXISTS returns_select ON stock_returns;
+CREATE POLICY returns_select ON stock_returns FOR SELECT TO authenticated USING (public.can_access_tenant(tenant_id));
+
 -- Hak akses tabel: tanpa login (anon) tidak ada; pengguna login hanya yang diperlukan.
-REVOKE ALL ON tenants, profiles, stock_items, sales, sale_lines FROM anon, authenticated;
-GRANT SELECT ON tenants, sales, sale_lines TO authenticated;
+REVOKE ALL ON tenants, profiles, stock_items, sales, sale_lines, stock_returns FROM anon, authenticated;
+GRANT SELECT ON tenants, sales, sale_lines, stock_returns TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON profiles TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON stock_items TO authenticated;
 
@@ -224,7 +248,7 @@ BEGIN
   END IF;
 
   UPDATE public.stock_items s
-     SET qty = s.qty - q.want, updated_at = now()
+     SET qty = s.qty - q.want
     FROM (SELECT e->>'id' AS id, (e->>'qty')::int AS want FROM jsonb_array_elements(p_lines) e) q
    WHERE s.tenant_id = p_tenant AND s.id = q.id;
 
@@ -252,6 +276,101 @@ BEGIN
 
   RETURN jsonb_build_object('no', v_no, 'at', v_at, 'cashier', v_cashier, 'method', p_method,
                             'total', v_total::int, 'paid', v_paid, 'lines', v_lines);
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- process_return(): satu retur yang atomik untuk satu barang.
+--   pelanggan: stok bertambah; nilai = jumlah x harga saat ini; jumlah kumulatif retur pelanggan tidak boleh
+--              melebihi jumlah yang pernah terjual (sale_lines) untuk barang itu.
+--   supplier : stok berkurang (tidak boleh melebihi stok); nilai 0.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.process_return(p_tenant text, p_kind text, p_item_id text, p_qty integer, p_reason text, p_note text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_uid     uuid := auth.uid();
+  v_at      timestamptz := now();
+  v_item    public.stock_items%ROWTYPE;
+  v_note    text := NULLIF(btrim(COALESCE(p_note, '')), '');
+  v_cashier text;
+  v_amount  bigint := 0;
+  v_after   integer;
+  v_sold    bigint;
+  v_back    bigint;
+  v_base    text;
+  v_no      text;
+  v_suffix  integer := 1;
+BEGIN
+  IF v_uid IS NULL OR public.app_role() IS NULL THEN
+    RAISE EXCEPTION 'Akses ditolak.' USING ERRCODE = '42501';
+  END IF;
+  IF NOT public.can_access_tenant(p_tenant) THEN
+    RAISE EXCEPTION 'Tidak punya akses ke tenant ini.' USING ERRCODE = '42501';
+  END IF;
+  IF p_kind NOT IN ('pelanggan', 'supplier') THEN
+    RAISE EXCEPTION 'Jenis retur tidak valid.' USING ERRCODE = '22023';
+  END IF;
+  IF p_qty IS NULL OR p_qty < 1 OR p_qty > 1000000 THEN
+    RAISE EXCEPTION 'Jumlah retur harus bilangan bulat 1 – 1.000.000.' USING ERRCODE = '22023';
+  END IF;
+  IF p_reason NOT IN ('rusak', 'kedaluwarsa', 'salah_barang', 'tidak_sesuai', 'lainnya')
+     OR (p_kind = 'pelanggan' AND p_reason = 'kedaluwarsa')
+     OR (p_kind = 'supplier'  AND p_reason IN ('salah_barang', 'tidak_sesuai')) THEN
+    RAISE EXCEPTION 'Alasan retur tidak valid.' USING ERRCODE = '22023';
+  END IF;
+  IF v_note IS NOT NULL AND char_length(v_note) > 100 THEN
+    RAISE EXCEPTION 'Catatan maksimal 100 karakter.' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT * INTO v_item FROM public.stock_items WHERE tenant_id = p_tenant AND id = p_item_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Barang tidak ditemukan di daftar stok.' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_kind = 'pelanggan' THEN
+    IF v_item.price IS NULL THEN
+      RAISE EXCEPTION 'Harga "%" belum diisi.', v_item.name USING ERRCODE = 'P0001';
+    END IF;
+    SELECT COALESCE(sum(qty), 0) INTO v_sold FROM public.sale_lines WHERE tenant_id = p_tenant AND item_id = p_item_id;
+    SELECT COALESCE(sum(qty), 0) INTO v_back FROM public.stock_returns WHERE tenant_id = p_tenant AND item_id = p_item_id AND kind = 'pelanggan';
+    IF v_back + p_qty > v_sold THEN
+      RAISE EXCEPTION 'Retur melebihi yang pernah terjual: terjual % %, sudah diretur % %.', v_sold, v_item.unit, v_back, v_item.unit USING ERRCODE = 'P0001';
+    END IF;
+    v_after  := v_item.qty + p_qty;
+    v_amount := p_qty::bigint * v_item.price;
+    IF v_after > 1000000 OR v_amount > 1000000000 THEN
+      RAISE EXCEPTION 'Jumlah retur terlalu besar.' USING ERRCODE = '22023';
+    END IF;
+  ELSE
+    IF p_qty > v_item.qty THEN
+      RAISE EXCEPTION 'Stok "%" tinggal % %.', v_item.name, v_item.qty, v_item.unit USING ERRCODE = 'P0001';
+    END IF;
+    v_after := v_item.qty - p_qty;
+  END IF;
+
+  UPDATE public.stock_items SET qty = v_after WHERE tenant_id = p_tenant AND id = p_item_id;
+
+  SELECT left(regexp_replace(name, '[^[:alnum:] .,''()&/+-]', '', 'g'), 60) INTO v_cashier FROM public.profiles WHERE id = v_uid;
+  v_cashier := COALESCE(NULLIF(btrim(v_cashier), ''), 'Kasir');
+
+  v_base := 'RTR-' || to_char(v_at AT TIME ZONE 'Asia/Jakarta', 'YYYYMMDD-HH24MISS');
+  LOOP
+    v_no := CASE WHEN v_suffix = 1 THEN v_base ELSE v_base || '-' || v_suffix END;
+    BEGIN
+      INSERT INTO public.stock_returns (tenant_id, no, at, cashier, kind, item_id, name, unit, qty, amount, reason, note)
+      VALUES (p_tenant, v_no, v_at, v_cashier, p_kind, p_item_id, v_item.name, v_item.unit, p_qty, v_amount::int, p_reason, v_note);
+      EXIT;
+    EXCEPTION WHEN unique_violation THEN
+      v_suffix := v_suffix + 1;
+      IF v_suffix > 999 THEN RAISE EXCEPTION 'Gagal membuat nomor retur.' USING ERRCODE = 'P0001'; END IF;
+    END;
+  END LOOP;
+
+  RETURN jsonb_build_object('no', v_no, 'at', v_at, 'cashier', v_cashier, 'kind', p_kind, 'item_id', p_item_id,
+                            'name', v_item.name, 'unit', v_item.unit, 'qty', p_qty, 'amount', v_amount::int,
+                            'reason', p_reason, 'note', v_note, 'stock_after', v_after);
 END;
 $$;
 
@@ -284,9 +403,11 @@ $$;
 
 REVOKE ALL ON FUNCTION public.checkout(text, text, integer, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.checkout(text, text, integer, jsonb) TO authenticated;
+REVOKE ALL ON FUNCTION public.process_return(text, text, text, integer, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.process_return(text, text, text, integer, text, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.delete_app_user(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.delete_app_user(text) TO authenticated;
-REVOKE ALL ON FUNCTION public.app_role(), public.app_tenant(), public.can_access_tenant(text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.app_role(), public.app_tenant(), public.can_access_tenant(text) TO authenticated;
+REVOKE ALL ON FUNCTION public.app_role(), public.can_access_tenant(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.app_role(), public.can_access_tenant(text) TO authenticated;
 
 COMMIT;

@@ -8,9 +8,9 @@ export const PERIODS = [
   { id: 'bulanan', label: 'Bulanan' }
 ];
 
-export const DAY_SHORT = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+const DAY_SHORT = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
-export const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const addDays = (date, n) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
 const mondayIndex = (date) => (date.getDay() + 6) % 7; // Senin = 0 ... Minggu = 6
 
@@ -57,7 +57,7 @@ export function periodLabel(kind, range) {
   return `${first.getDate()}–${last.getDate()} ${fmt(last, { month: 'short', year: 'numeric' })}`;
 }
 
-export function salesInRange(sales, range) {
+function salesInRange(sales, range) {
   return sales.filter((sale) => containsDate(range, new Date(sale.at)));
 }
 

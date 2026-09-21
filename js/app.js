@@ -11,6 +11,8 @@ import { renderHargaPage, initHargaPage } from './pages/update-harga.js';
 import { renderTransaksiPage, initTransaksiPage } from './pages/transaksi.js';
 import { renderStokKeluarPage, initStokKeluarPage } from './pages/stok-keluar.js';
 import { renderStokTotalPage, initStokTotalPage } from './pages/stok-total.js';
+import { renderStokReturPage, initStokReturPage } from './pages/stok-retur.js';
+import { ReturnStore } from './returns.js';
 import { checkDbStatus, describeDb } from './db-status.js';
 import { SalesStore } from './sales.js';
 import { StockStore } from './stock.js';
@@ -39,12 +41,12 @@ if (!Auth.isAuthenticated()) {
   initLoginPage();
 } else {
   // Stok dan riwayat penjualan ada di database: muat dulu agar tiap halaman langsung menampilkan data terbaru.
-  const [stock, sales] = await Promise.all([StockStore.load(), SalesStore.load()]);
-  if (stock.expired || sales.expired) {
+  const [stock, sales, returns] = await Promise.all([StockStore.load(), SalesStore.load(), ReturnStore.load()]);
+  if (stock.expired || sales.expired || returns.expired) {
     Auth.logout(); // sesi Supabase sudah tidak berlaku → login ulang
     window.location.reload();
   } else {
-    const failed = [stock, sales].find((result) => !result.success);
+    const failed = [stock, sales, returns].find((result) => !result.success);
     if (failed) UI.toast(`Data belum bisa dimuat: ${failed.error}`, { type: 'danger', duration: 9000 });
     initAuthenticatedApp();
   }
@@ -95,7 +97,7 @@ if (bottomNav) {
       items: [
         { id: '/stok/awal', label: 'Stok Awal', desc: 'Input & lihat stok awal periode', icon: SHEET_ICONS.box },
         { id: '/stok/keluar-laku', label: 'Stok Keluar (Laku)', desc: 'Stok keluar akibat penjualan', icon: SHEET_ICONS.box },
-        { id: '/stok/retur', label: 'Stok Retur', desc: 'Proses & laporan retur barang', icon: SHEET_ICONS.box },
+        { id: '/stok/retur', label: 'Stok Retur', desc: 'Retur pelanggan & barang rusak', icon: SHEET_ICONS.box },
         { id: '/stok/total', label: 'Stok Total', desc: 'Sisa stok terakhir setelah transaksi', icon: SHEET_ICONS.box }
       ]
     });
@@ -257,7 +259,7 @@ router
   .add('/pengaturan', () => { setTimeout(initSettingsPage, 150); return settingsPage(); })
   .add('/stok/awal', () => { setTimeout(initStokAwalPage, 150); return renderStokAwalPage(); })
   .add('/stok/keluar-laku', () => { setTimeout(initStokKeluarPage, 150); return renderStokKeluarPage(); })
-  .add('/stok/retur', () => placeholderPage('Stok Retur', 'Proses dan laporan retur barang.'))
+  .add('/stok/retur', () => { setTimeout(initStokReturPage, 150); return renderStokReturPage(); })
   .add('/stok/total', () => { setTimeout(initStokTotalPage, 150); return renderStokTotalPage(); })
   .add('/harga', () => { setTimeout(initHargaPage, 150); return renderHargaPage(); })
   .add('/laporan-kasir', () => placeholderPage('Laporan Kasir', 'Preview dan cetak laporan kasir harian.'))
