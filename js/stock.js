@@ -11,6 +11,8 @@ const TABLE = 'stock_items';
 const COLUMNS = 'tenant_id,id,name,qty,unit,barcode,price';
 const MAX_QTY = 1000000;
 export const MAX_PRICE = 100000000;
+// Ambang "stok menipis" — dipakai Stok Total dan Beranda supaya definisinya satu tempat.
+export const LOW_STOCK_MAX = 5;
 const NAME_PATTERN = /^[\p{L}\p{N} .,'()&/+-]{2,60}$/u;
 const BARCODE_PATTERN = /^[A-Za-z0-9._-]{4,40}$/;
 

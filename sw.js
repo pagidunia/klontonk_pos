@@ -44,6 +44,7 @@ const PRECACHE = [
   './js/theme.js',
   './js/ui.js',
   './js/pages/home.js',
+  './js/pages/laporan.js',
   './js/pages/login.js',
   './js/pages/stok-awal.js',
   './js/pages/stok-keluar.js',
