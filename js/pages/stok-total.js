@@ -1,4 +1,4 @@
-import { StockStore } from '../stock.js';
+import { StockStore, LOW_STOCK_MAX } from '../stock.js';
 import { SalesStore } from '../sales.js';
 import { TenantStore } from '../tenant.js';
 import { UI } from '../ui.js';
@@ -9,7 +9,6 @@ import { UI } from '../ui.js';
 
 const esc = (value) => UI._escape(String(value ?? ''));
 const formatQty = (qty) => Number(qty).toLocaleString('id-ID');
-const LOW_STOCK_MAX = 5;
 
 const FILTERS = [
   { id: 'semua', label: 'Semua' },

@@ -12,6 +12,7 @@ import { renderTransaksiPage, initTransaksiPage } from './pages/transaksi.js';
 import { renderStokKeluarPage, initStokKeluarPage } from './pages/stok-keluar.js';
 import { renderStokTotalPage, initStokTotalPage } from './pages/stok-total.js';
 import { renderStokReturPage, initStokReturPage } from './pages/stok-retur.js';
+import { renderLaporanPage, initLaporanPage } from './pages/laporan.js';
 import { ReturnStore } from './returns.js';
 import { checkDbStatus, describeDb } from './db-status.js';
 import { SalesStore } from './sales.js';
@@ -40,15 +41,22 @@ if (!Auth.isAuthenticated()) {
   document.body.insertAdjacentHTML('beforeend', `<div id="loginRoot">${renderLogin()}</div>`);
   initLoginPage();
 } else {
-  // Stok dan riwayat penjualan ada di database: muat dulu agar tiap halaman langsung menampilkan data terbaru.
-  const [stock, sales, returns] = await Promise.all([StockStore.load(), SalesStore.load(), ReturnStore.load()]);
-  if (stock.expired || sales.expired || returns.expired) {
+  // Daftar tenant dimuat dulu dari database — stok, penjualan, dan retur dikelompokkan per tenant memakainya.
+  const tenants = await TenantStore.load();
+  if (tenants.expired) {
     Auth.logout(); // sesi Supabase sudah tidak berlaku → login ulang
     window.location.reload();
   } else {
-    const failed = [stock, sales, returns].find((result) => !result.success);
-    if (failed) UI.toast(`Data belum bisa dimuat: ${failed.error}`, { type: 'danger', duration: 9000 });
-    initAuthenticatedApp();
+    // Stok dan riwayat penjualan ada di database: muat dulu agar tiap halaman langsung menampilkan data terbaru.
+    const [stock, sales, returns] = await Promise.all([StockStore.load(), SalesStore.load(), ReturnStore.load()]);
+    if (stock.expired || sales.expired || returns.expired) {
+      Auth.logout();
+      window.location.reload();
+    } else {
+      const failed = [tenants, stock, sales, returns].find((result) => !result.success);
+      if (failed) UI.toast(`Data belum bisa dimuat: ${failed.error}`, { type: 'danger', duration: 9000 });
+      initAuthenticatedApp();
+    }
   }
 }
 
@@ -67,7 +75,6 @@ const APP_VERSION = '1.2.0';
 const SHEET_ICONS = {
   box: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
   dollar: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>',
-  warehouse: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"></path></svg>',
   userPlus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>',
   user: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
   gear: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
@@ -108,8 +115,7 @@ if (bottomNav) {
   const lainnyaTab = bottomNav.querySelector('[data-tab="lainnya"]');
   if (lainnyaTab) lainnyaTab.addEventListener('click', async () => {
     const items = [
-      { id: '/harga', label: 'Update Harga', desc: 'Atur harga jual per barang', icon: SHEET_ICONS.dollar },
-      { id: '/gudang', label: 'Gudang', desc: 'Inventori gudang pusat', icon: SHEET_ICONS.warehouse }
+      { id: '/harga', label: 'Update Harga', desc: 'Atur harga jual per barang', icon: SHEET_ICONS.dollar }
     ];
     if (currentIsAdmin()) {
       items.push({ id: '/users', label: 'Tambah User', desc: 'Kelola akun admin & kasir', icon: SHEET_ICONS.userPlus });
@@ -262,8 +268,7 @@ router
   .add('/stok/retur', () => { setTimeout(initStokReturPage, 150); return renderStokReturPage(); })
   .add('/stok/total', () => { setTimeout(initStokTotalPage, 150); return renderStokTotalPage(); })
   .add('/harga', () => { setTimeout(initHargaPage, 150); return renderHargaPage(); })
-  .add('/laporan-kasir', () => placeholderPage('Laporan Kasir', 'Preview dan cetak laporan kasir harian.'))
-  .add('/gudang', () => placeholderPage('Gudang', 'Manajemen inventori gudang pusat.'))
+  .add('/laporan-kasir', () => { setTimeout(initLaporanPage, 150); return renderLaporanPage(); })
   .add('/users', adminGuard(renderUsersPage, initUsersPage))
   .setNotFound(() => placeholderPage('404', 'Halaman yang Anda tuju tidak ditemukan.'))
   .start();
@@ -301,7 +306,7 @@ const WHATS_NEW = [
 
 const MAINTENANCE_INFO = [
   { title: 'Maintenance Terjadwal', desc: 'Minggu, 02.00–03.00 WIB — sebagian fitur mungkin tidak tersedia sementara.' },
-  { title: 'Roadmap Berikutnya', desc: 'Laporan kasir cetak, manajemen gudang, dan sinkronisasi stok antar cabang.' }
+  { title: 'Roadmap Berikutnya', desc: 'Laporan kasir cetak dan sinkronisasi stok antar cabang.' }
 ];
 
 function showWelcomePopup() {

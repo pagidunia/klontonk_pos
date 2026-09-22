@@ -847,6 +847,19 @@ ul { list-style: none; }
   background: rgba(220, 38, 38, 0.1);
 }
 
+.stat-trend.flat {
+  color: var(--text-muted);
+  background: var(--bg-surface-2);
+}
+
+.activity-empty {
+  margin: 0;
+  padding: 24px 8px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
 /* === Quick Actions === */
 .section-title {
   font-size: 14px;
@@ -2857,3 +2870,27 @@ ul { list-style: none; }
 [data-theme="dark"] .ret-badge.is-pelanggan { color: #7FDCA0; background: rgba(46, 160, 90, 0.18); }
 [data-theme="dark"] .ret-badge.is-supplier { color: #F5C84B; background: rgba(224, 161, 0, 0.18); }
 .ret-empty { padding: 24px 8px; font-size: 13px; text-align: center; color: var(--text-muted); }
+
+/* ============ LAPORAN (.lap-*) ============ */
+.lap-page { display: flex; flex-direction: column; gap: 14px; font-variant-numeric: tabular-nums; }
+.lap-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.lap-meta { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+.lap-print-btn { flex-shrink: 0; }
+.lap-table-wrap { margin-top: 14px; overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+.lap-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+.lap-table th, .lap-table td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--border-subtle); }
+.lap-table th:first-child, .lap-table td:first-child { text-align: left; white-space: normal; }
+.lap-table th { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); background: var(--bg-surface-2); }
+.lap-table tbody tr:last-child td { border-bottom: 0; }
+.lap-cell-name { font-weight: 600; color: var(--text-primary); }
+.lap-empty { padding: 24px 8px; font-size: 13px; text-align: center; color: var(--text-muted); }
+.lap-more-note { margin: 0; padding: 14px; font-size: 12.5px; text-align: center; color: var(--text-muted); background: var(--bg-surface); border: 1px dashed var(--border-subtle); border-radius: var(--radius-md); }
+
+/* Cetak: hanya isi laporan yang tampil, tanpa chrome aplikasi. */
+@media print {
+  .app-header, .bottom-nav, .page-subtitle, .lap-print-btn, .lap-more-note, #sheetRoot, #modalRoot, #toastRoot { display: none !important; }
+  .app-main { padding: 0 !important; }
+  .lap-card { border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+  .lap-table-wrap { border: 0 !important; }
+  body { background: #FFFFFF !important; }
+}
