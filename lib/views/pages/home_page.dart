@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/format.dart';
+import '../../domain/permissions.dart';
 import '../../viewmodels/app_deps.dart';
 import '../../viewmodels/home_view_model.dart';
 import '../theme.dart';
@@ -34,13 +35,15 @@ class _HomeView extends StatelessWidget {
     final accents = [p.primary, p.success, p.warning, p.info];
     final activity = vm.activity();
 
+    // Aksi cepat hanya menampilkan menu yang boleh dibuka role akun ini.
+    final laporanPath = session.can('/laporan/stok-awal') ? '/laporan/stok-awal' : '/laporan/stok-keluar';
     final quick = [
-      (Icons.point_of_sale, 'Transaksi', 'Transaksi penjualan baru', '/kasir'),
-      (Icons.inventory_2_outlined, 'Cek Stok', 'Lihat stok total', '/stok/total'),
-      if (session.canEditStock) (Icons.sell_outlined, 'Update Harga', 'Sesuaikan harga produk', '/harga'),
-      (Icons.description_outlined, 'Laporan Kasir', 'Cetak / preview laporan', '/laporan/stok-awal'),
-      (Icons.assignment_return_outlined, 'Retur Barang', 'Proses retur cepat', '/stok/retur'),
-    ];
+      (Icons.point_of_sale, 'Transaksi', 'Transaksi penjualan baru', '/kasir', 'transaksi'),
+      (Icons.inventory_2_outlined, 'Cek Stok', 'Lihat stok total', '/stok/total', 'cek-stok'),
+      (Icons.sell_outlined, 'Update Harga', 'Sesuaikan harga produk', '/harga', 'update-harga'),
+      (Icons.description_outlined, 'Laporan Kasir', 'Cetak / preview laporan', laporanPath, 'laporan-kasir'),
+      (Icons.assignment_return_outlined, 'Retur Barang', 'Proses retur cepat', '/stok/retur', 'retur'),
+    ].where((q) => session.can('$awalanAksiCepat${q.$5}')).toList();
 
     return PageScroll(children: [
       PageHeader(greeting: '${sapaan(now)} · ${session.currentTenant.name}', title: 'Dashboard Klontonk', subtitle: 'Ringkasan operasional hari ini, ${namaHari[(now.weekday + 6) % 7]}, ${now.day} ${namaBulan[now.month - 1]}'),

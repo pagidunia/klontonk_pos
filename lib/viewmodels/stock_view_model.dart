@@ -26,6 +26,7 @@ class StockViewModel extends ChangeNotifier {
 
   Map<String, List<StockItem>> _data = {};
   Future<void> _chain = Future.value();
+  Timer? _snapshotTimer;
   final _errorHandlers = <void Function(String)>[];
 
   /// Dipanggil bila database menolak / tidak bisa menyimpan.
@@ -43,14 +44,26 @@ class StockViewModel extends ChangeNotifier {
   }
 
   void clear() {
+    _snapshotTimer?.cancel();
     _data = {};
     notifyListeners();
   }
 
   void _commit(List<StockItem> next) {
     _data = {..._data, _session.tenantId: next};
-    _snapshots.save(_snapshotName, _data.map((k, v) => MapEntry(k, v.map((i) => i.toJson()).toList()))); // agar aplikasi yang dibuka offline melihat stok terbaru
+    _scheduleSnapshot();
     notifyListeners();
+  }
+
+  /// Salinan offline ditulis paling cepat tiap 1 detik: meng-encode seluruh stok pada setiap
+  /// ketukan (mis. tiap barang laku) membebani UI saat daftar barang besar.
+  void _scheduleSnapshot() {
+    _snapshotTimer?.cancel();
+    _snapshotTimer = Timer(const Duration(seconds: 1), _writeSnapshot);
+  }
+
+  void _writeSnapshot() {
+    _snapshots.save(_snapshotName, _data.map((k, v) => MapEntry(k, v.map((i) => i.toJson()).toList()))); // agar aplikasi yang dibuka offline melihat stok terbaru
   }
 
   /// Muat stok dari database. Tanpa jaringan dan ada salinan terakhir di perangkat: salinan dipakai
@@ -75,7 +88,7 @@ class StockViewModel extends ChangeNotifier {
         return (success: false, offline: false, at: null, error: describeStockError(error), expired: error.expired);
       case Ok(:final data):
         _data = {for (final t in _session.tenants) t.id: <StockItem>[], ...data};
-        _snapshots.save(_snapshotName, _data.map((k, v) => MapEntry(k, v.map((i) => i.toJson()).toList())));
+        _writeSnapshot();
         notifyListeners();
         return (success: true, offline: false, at: null, error: null, expired: false);
     }

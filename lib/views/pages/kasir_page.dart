@@ -89,30 +89,48 @@ class _KasirViewState extends State<_KasirView> {
     final sum = vm.summary;
 
     return Stack(children: [
-      ListView(padding: EdgeInsets.fromLTRB(16, 8, 16, sum.lineCount > 0 ? 96 : 24), children: [
-        PageHeader(greeting: 'Kasir · ${vm.session.currentTenant.name}', title: 'Transaksi', subtitle: 'Cari atau scan barang, atur jumlah di keranjang, lalu terima pembayaran.'),
-        Row(children: [
-          Expanded(child: TextField(controller: _search, onChanged: vm.setQuery, onSubmitted: _submitSearch, textInputAction: TextInputAction.search, decoration: const InputDecoration(hintText: 'Cari nama atau barcode', prefixIcon: Icon(Icons.search)))),
-          const SizedBox(width: 10),
-          SizedBox(height: 52, width: 52, child: OutlinedButton(onPressed: _scan, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero), child: const Icon(Icons.qr_code_scanner))),
-        ]),
-        Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text('${vm.itemCountAll} barang · ${vm.sellableCount} siap dijual', style: TextStyle(fontSize: 12.5, color: p.textMuted))),
-        if (vm.itemCountAll == 0)
-          EmptyNote(vm.session.canEditStock ? 'Belum ada barang. Tambahkan dulu di menu Stok Awal.' : 'Belum ada barang. Stok diinput oleh tenantnya sendiri.')
-        else if (items.isEmpty)
-          EmptyNote('Tidak ada barang untuk “${vm.query}”.')
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.35),
-            itemCount: items.length,
-            itemBuilder: (_, i) => _ItemCard(item: items[i], inCart: vm.cart[items[i].id] ?? 0, onTap: () {
-              final msg = vm.addItem(items[i]);
-              if (msg != null) context.read<AppDeps>().toast.show(msg, type: ToastType.warning);
-            }),
+      CustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                PageHeader(greeting: 'Kasir · ${vm.session.currentTenant.name}', title: 'Transaksi', subtitle: 'Cari atau scan barang, atur jumlah di keranjang, lalu terima pembayaran.'),
+                Row(children: [
+                  Expanded(child: TextField(controller: _search, onChanged: vm.setQuery, onSubmitted: _submitSearch, textInputAction: TextInputAction.search, decoration: const InputDecoration(hintText: 'Cari nama atau barcode', prefixIcon: Icon(Icons.search)))),
+                  const SizedBox(width: 10),
+                  SizedBox(height: 52, width: 52, child: OutlinedButton(onPressed: _scan, style: OutlinedButton.styleFrom(padding: EdgeInsets.zero), child: const Icon(Icons.qr_code_scanner))),
+                ]),
+                Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text('${vm.itemCountAll} barang · ${vm.sellableCount} siap dijual', style: TextStyle(fontSize: 12.5, color: p.textMuted))),
+                if (vm.itemCountAll == 0)
+                  EmptyNote(vm.session.can('/stok/awal') ? 'Belum ada barang. Tambahkan dulu di menu Stok Awal.' : 'Belum ada barang. Stok diinput oleh tenantnya sendiri.')
+                else if (items.isEmpty)
+                  EmptyNote('Tidak ada barang untuk “${vm.query}”.'),
+              ]),
+            ),
           ),
-      ]),
+          // Grid lazy: hanya kartu yang terlihat di layar yang dibangun (daftar barang bisa ratusan).
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, sum.lineCount > 0 ? 96 : 24),
+            sliver: SliverGrid.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.35),
+              itemCount: items.length,
+              itemBuilder: (_, i) => RepaintBoundary(
+                child: _ItemCard(
+                  key: ValueKey(items[i].id),
+                  item: items[i],
+                  inCart: vm.cart[items[i].id] ?? 0,
+                  onTap: () {
+                    final msg = vm.addItem(items[i]);
+                    if (msg != null) context.read<AppDeps>().toast.show(msg, type: ToastType.warning);
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       if (sum.lineCount > 0)
         Positioned(
           left: 16,
@@ -143,7 +161,7 @@ class _KasirViewState extends State<_KasirView> {
 }
 
 class _ItemCard extends StatelessWidget {
-  const _ItemCard({required this.item, required this.inCart, required this.onTap});
+  const _ItemCard({super.key, required this.item, required this.inCart, required this.onTap});
   final StockItem item;
   final int inCart;
   final VoidCallback onTap;

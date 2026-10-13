@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/calendar.dart';
-import '../data/models/models.dart';
 import '../domain/finance.dart';
 import 'returns_view_model.dart';
 import 'sales_view_model.dart';
@@ -25,8 +24,6 @@ class KeuanganViewModel extends ChangeNotifier {
   bool get isCurrent => mode != FinanceMode.custom && isSameDay(financeRange(mode, DateTime.now()).start, range.start);
 
   FinanceSummary get summary => financeSummary(mode, range, sales.sales, returns.items);
-
-  List<StockReturn> get customerReturnsInRange => returns.items.where((r) => r.kind == 'pelanggan' && range.contains(r.at.toLocal())).toList();
 
   void setMode(FinanceMode value) {
     mode = value;

@@ -52,6 +52,11 @@ void main() {
     expect(prefs.autoPrint, isFalse);
     await prefs.setAutoPrint(true);
     expect(prefs.autoPrint, isTrue);
+    expect(prefs.scanFront, isFalse); // bawaan: kamera belakang
+    await prefs.setScanFront(true);
+    expect(prefs.scanFront, isTrue);
+    await prefs.setScanFront(false);
+    expect(prefs.scanFront, isFalse);
     await prefs.setThrottle(3, 12345);
     expect(prefs.throttle, (count: 3, lockedUntil: 12345));
     await prefs.resetThrottle();

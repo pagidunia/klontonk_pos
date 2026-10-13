@@ -8,6 +8,7 @@ import 'data/local/key_value_store.dart';
 import 'data/local/local_stores.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/return_repository.dart';
+import 'data/repositories/role_menu_repository.dart';
 import 'data/repositories/sales_repository.dart';
 import 'data/repositories/stock_repository.dart';
 import 'data/repositories/tenant_repository.dart';
@@ -31,7 +32,7 @@ Future<void> main() async {
   final db = Supabase.instance.client;
 
   // Klien tanpa sesi: membuat akun baru tanpa menimpa sesi admin yang sedang aktif.
-  SupabaseClient detached() => SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseKey, authOptions: const AuthClientOptions(autoRefreshToken: false));
+  SupabaseClient detached() => SupabaseClient(AppConfig.supabaseUrl, AppConfig.supabaseKey, authOptions: const AuthClientOptions(autoRefreshToken: false, authFlowType: AuthFlowType.implicit));
 
   final KeyValueStore store = PrefsStore(await SharedPreferences.getInstance());
   final prefs = PreferencesStore(store);
@@ -40,7 +41,7 @@ Future<void> main() async {
   final toast = ToastService();
 
   final authRepo = AuthRepository(db, detached);
-  final session = SessionViewModel(auth: authRepo, tenants: TenantRepository(db), prefs: prefs, store: store, snapshots: snapshots, toast: toast);
+  final session = SessionViewModel(auth: authRepo, tenants: TenantRepository(db), roleMenus: RoleMenuRepository(db), prefs: prefs, store: store, snapshots: snapshots, toast: toast);
   final stock = StockViewModel(StockRepository(db), session, snapshots);
   final sales = SalesViewModel(repo: SalesRepository(db), auth: authRepo, session: session, stock: stock, outbox: outbox);
   final returns = ReturnsViewModel(ReturnRepository(db), session, stock, sales);

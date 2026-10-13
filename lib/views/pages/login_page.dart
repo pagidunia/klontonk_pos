@@ -97,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 6),
                   FilledButton(onPressed: _busy ? null : _submit, child: Text(_busy ? 'Memeriksa...' : 'Masuk')),
                   const SizedBox(height: 18),
-                  Text('v${AppConfig.appVersion}', textAlign: TextAlign.center, style: TextStyle(color: p.textMuted, fontSize: 12)),
+                  Text(AppConfig.appVersion, textAlign: TextAlign.center, style: TextStyle(color: p.textMuted, fontSize: 12)),
                 ]),
               ),
             ),

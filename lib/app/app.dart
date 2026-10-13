@@ -40,11 +40,8 @@ class _KlontonkAppState extends State<KlontonkApp> {
 
     Page<void> page(GoRouterState state, Widget child) => NoTransitionPage<void>(key: state.pageKey, child: child);
 
-    // Guard: halaman admin ditolak untuk non-admin; input stok/harga hanya untuk akun tenant.
-    Widget adminOnly(Widget child) => session.isAdmin ? child : const ForbiddenPage();
-    Widget tenantOnly(Widget child) => session.canEditStock ? child : const ForbiddenPage.tenantOnly();
-
-    GoRoute route(String path, Widget Function() build) => GoRoute(path: path, pageBuilder: (c, s) => page(s, build()));
+    // Penjaga rute: menu di luar jatah role ditolak walau alamatnya dibuka langsung.
+    GoRoute route(String path, Widget Function() build) => GoRoute(path: path, pageBuilder: (c, s) => page(s, session.can(path) ? build() : const ForbiddenPage()));
 
     return GoRouter(
       navigatorKey: deps.dialog.navigatorKey,
@@ -67,19 +64,19 @@ class _KlontonkAppState extends State<KlontonkApp> {
             route('/kasir', () => const KasirPage()),
             route('/akun', () => const AkunPage()),
             route('/pengaturan', () => const PengaturanPage()),
-            route('/stok/awal', () => tenantOnly(const StokAwalPage())),
+            route('/stok/awal', () => const StokAwalPage()),
             route('/stok/keluar-laku', () => const StokKeluarPage()),
             route('/stok/retur', () => const StokReturPage()),
             route('/stok/total', () => const StokTotalPage()),
             route('/info-update', () => const InfoUpdatePage()),
             route('/catatan', () => const CatatanPage()),
-            route('/harga', () => tenantOnly(const HargaPage())),
+            route('/harga', () => const HargaPage()),
             route('/laporan/stok-awal', () => const LaporanStokAwalPage()),
             route('/laporan/stok-keluar', () => const LaporanStokKeluarPage()),
             route('/laporan/stok-retur', () => const LaporanStokReturPage()),
             route('/laporan/stok-total', () => const LaporanStokTotalPage()),
             route('/laporan/keuangan', () => const KeuanganPage()),
-            route('/users', () => adminOnly(const UsersPage())),
+            route('/users', () => const UsersPage()),
           ],
         ),
       ],

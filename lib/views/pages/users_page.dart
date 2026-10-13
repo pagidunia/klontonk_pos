@@ -60,7 +60,7 @@ class _ViewState extends State<_View> {
     final p = context.pal;
     final vm = context.watch<UsersViewModel>();
     final tenants = vm.session.tenants;
-    final tenant = tenants.any((t) => t.id == _tenant) ? _tenant! : tenants.first.id;
+    final String? tenant = tenants.any((t) => t.id == _tenant) ? _tenant : (tenants.isEmpty ? null : tenants.first.id);
     final strength = passwordStrength(_password.text);
     final strengthColor = [p.border, p.danger, p.warning, p.info, p.success][strength];
 
@@ -84,13 +84,13 @@ class _ViewState extends State<_View> {
           Row(children: [for (var i = 1; i <= 4; i++) Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2), height: 5, decoration: BoxDecoration(color: i <= strength ? strengthColor : p.border, borderRadius: BorderRadius.circular(3))))]),
           const SizedBox(height: 14),
           Row(children: [
-            Expanded(child: DropdownButtonFormField<String>(initialValue: _role, decoration: const InputDecoration(labelText: 'Role'), items: const [DropdownMenuItem(value: 'cashier', child: Text('Kasir')), DropdownMenuItem(value: 'admin', child: Text('Admin'))], onChanged: (v) => setState(() => _role = v ?? 'cashier'))),
+            Expanded(child: DropdownButtonFormField<String>(initialValue: _role, decoration: const InputDecoration(labelText: 'Role'), items: const [DropdownMenuItem(value: 'cashier', child: Text('Kasir')), DropdownMenuItem(value: 'kepala_cashier', child: Text('Kepala Cashier'))], onChanged: (v) => setState(() => _role = v ?? 'cashier'))),
             const SizedBox(width: 12),
-            Expanded(child: DropdownButtonFormField<String>(initialValue: tenant, isExpanded: true, decoration: const InputDecoration(labelText: 'Cabang'), items: [for (final t in tenants) DropdownMenuItem(value: t.id, child: Text(t.name, overflow: TextOverflow.ellipsis))], onChanged: (v) => setState(() => _tenant = v))),
+            Expanded(child: DropdownButtonFormField<String>(initialValue: tenant, isExpanded: true, decoration: const InputDecoration(labelText: 'Client'), items: [for (final t in tenants) DropdownMenuItem(value: t.id, child: Text(t.name, overflow: TextOverflow.ellipsis))], onChanged: (v) => setState(() => _tenant = v))),
           ]),
           const SizedBox(height: 14),
           FormError(_error),
-          FilledButton(onPressed: vm.saving ? null : () => _submit(tenants.first.id), child: Text(vm.saving ? 'Menyimpan…' : 'Simpan User')),
+          FilledButton(onPressed: vm.saving || tenants.isEmpty ? null : () => _submit(tenants.first.id), child: Text(vm.saving ? 'Menyimpan…' : 'Simpan User')),
         ]),
       ),
       SectionCard(
@@ -110,7 +110,7 @@ class _ViewState extends State<_View> {
                               CircleAvatar(backgroundColor: p.primarySoft, child: Text(u.avatar.isEmpty ? '?' : u.avatar, style: TextStyle(color: p.primary, fontWeight: FontWeight.w800))),
                               const SizedBox(width: 12),
                               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(u.name, style: const TextStyle(fontWeight: FontWeight.w700)), Text('@${u.username} · ${tenants.where((t) => t.id == u.tenantId).map((t) => t.name).firstOrNull ?? u.tenantId}', style: TextStyle(fontSize: 12, color: p.textSecondary))])),
-                              Pill(u.role == 'admin' ? 'Admin' : 'Kasir', color: u.role == 'admin' ? p.primary : p.textMuted),
+                              Pill(u.role == 'kepala_cashier' ? 'Kepala Cashier' : 'Kasir', color: u.role == 'kepala_cashier' ? p.primary : p.textMuted),
                               IconButton(icon: Icon(Icons.delete_outline, color: p.danger), onPressed: u.id == vm.session.user?.id ? null : () => vm.delete(u)),
                             ]),
                           ),

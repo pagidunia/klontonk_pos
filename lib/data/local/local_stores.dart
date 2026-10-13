@@ -113,6 +113,7 @@ class PreferencesStore {
 
   static const themeKey = 'klontonk:theme';
   static const autoPrintKey = 'klontonk:autoprint';
+  static const scanFrontKey = 'klontonk:scan_front';
   static const tenantKey = 'klontonk:tenant';
   static const throttleKey = 'klontonk:auth_throttle';
   static const activityKey = 'klontonk:last_activity';
@@ -121,10 +122,13 @@ class PreferencesStore {
   String? get theme => _store.getString(themeKey);
   Future<void> setTheme(String value) => _store.setString(themeKey, value);
 
+  /// Kamera scan barcode: true = kamera depan, false (bawaan) = kamera belakang.
+  bool get scanFront => _store.getString(scanFrontKey) == '1';
+  Future<void> setScanFront(bool front) => _store.setString(scanFrontKey, front ? '1' : '0');
+
   bool get autoPrint => _store.getString(autoPrintKey) == '1';
   Future<void> setAutoPrint(bool on) => _store.setString(autoPrintKey, on ? '1' : '0');
 
-  String? get tenant => _store.getString(tenantKey);
   Future<void> setTenant(String id) => _store.setString(tenantKey, id);
 
   ({int count, int lockedUntil}) get throttle {

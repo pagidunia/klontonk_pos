@@ -15,17 +15,15 @@ import 'widgets/common.dart';
 import 'widgets/dialogs.dart';
 
 class _MenuItem {
-  const _MenuItem(this.path, this.label, this.desc, this.icon, {this.tenantOnly = false, this.adminOnly = false});
+  const _MenuItem(this.path, this.label, this.desc, this.icon);
   final String path;
   final String label;
   final String desc;
   final IconData icon;
-  final bool tenantOnly;
-  final bool adminOnly;
 }
 
 const _stokMenu = [
-  _MenuItem('/stok/awal', 'Stok Awal', 'Input & lihat stok awal periode', Icons.inventory_2_outlined, tenantOnly: true),
+  _MenuItem('/stok/awal', 'Stok Awal', 'Input & lihat stok awal periode', Icons.inventory_2_outlined),
   _MenuItem('/stok/keluar-laku', 'Stok Keluar (Laku)', 'Stok keluar akibat penjualan', Icons.shopping_bag_outlined),
   _MenuItem('/stok/retur', 'Stok Retur', 'Retur pelanggan & barang rusak', Icons.assignment_return_outlined),
   _MenuItem('/stok/total', 'Stok Total', 'Sisa stok terakhir setelah transaksi', Icons.warehouse_outlined),
@@ -40,10 +38,10 @@ const _laporanMenu = [
 ];
 
 const _lainnyaMenu = [
-  _MenuItem('/harga', 'Update Harga', 'Atur harga jual per barang', Icons.sell_outlined, tenantOnly: true),
+  _MenuItem('/harga', 'Update Harga', 'Atur harga jual per barang', Icons.sell_outlined),
   _MenuItem('/catatan', 'Catatan', 'Catatan serah terima shift', Icons.edit_note_outlined),
   _MenuItem('/info-update', 'Info Update', 'Perubahan terbaru & maintenance', Icons.info_outline),
-  _MenuItem('/users', 'Tambah User', 'Kelola akun admin & kasir', Icons.person_add_alt_outlined, adminOnly: true),
+  _MenuItem('/users', 'Tambah User', 'Kelola akun admin & kasir', Icons.person_add_alt_outlined),
 ];
 
 /// Kerangka aplikasi: bilah atas (akun, cabang, status koneksi), laci akun, dan navigasi bawah.
@@ -132,7 +130,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   Future<void> _openMenu(String title, List<_MenuItem> items) async {
     final session = _deps.session;
-    final visible = items.where((i) => (!i.tenantOnly || session.canEditStock) && (!i.adminOnly || session.isAdmin)).toList();
+    final visible = items.where((i) => session.can(i.path)).toList();
     final picked = await showModalBottomSheet<_MenuItem>(
       context: context,
       showDragHandle: true,
@@ -245,7 +243,7 @@ class _AccountDrawer extends StatelessWidget {
               CircleAvatar(radius: 26, backgroundColor: Colors.white, child: Text(user?.avatar ?? '?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: p.primary))),
               const SizedBox(height: 12),
               Text(user?.name ?? '-', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
-              Text('${user?.isAdmin == true ? 'Admin' : 'Kasir'} · ${session.currentTenant.name}', style: const TextStyle(color: Colors.white70)),
+              Text('${user?.isAdmin == true ? 'Kepala Cashier' : 'Kasir'} · ${session.currentTenant.name}', style: const TextStyle(color: Colors.white70)),
             ]),
           ),
           ListTile(leading: const Icon(Icons.person_outline), title: const Text('Informasi Akun'), subtitle: Text('@${user?.username ?? ''}'), onTap: () => onNavigate('/akun')),
@@ -254,7 +252,7 @@ class _AccountDrawer extends StatelessWidget {
           const Divider(height: 1),
           ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('Pengaturan'), subtitle: const Text('Tema & preferensi'), onTap: () => onNavigate('/pengaturan')),
           ListTile(leading: Icon(Icons.logout, color: p.danger), title: Text('Logout', style: TextStyle(color: p.danger, fontWeight: FontWeight.w700)), onTap: logout),
-          ListTile(leading: const Icon(Icons.info_outline), title: const Text('Versi Aplikasi'), subtitle: Text('v${AppConfig.appVersion} · Multi-Tenant')),
+          ListTile(leading: const Icon(Icons.info_outline), title: const Text('Versi Aplikasi'), subtitle: Text('${AppConfig.appVersion} · Multi-Tenant')),
         ]),
       ),
     );

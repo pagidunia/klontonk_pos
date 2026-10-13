@@ -14,5 +14,3 @@ class DateRange {
   bool contains(DateTime d) => !d.isBefore(start) && d.isBefore(end);
 }
 
-/// "2026-10-07".
-String toIsoDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

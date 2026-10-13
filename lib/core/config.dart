@@ -10,7 +10,7 @@ class AppConfig {
   static const supabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://bxynoilzdiqjiepdewnp.supabase.co');
   static const supabaseKey = String.fromEnvironment('SUPABASE_KEY', defaultValue: 'sb_publishable_biqV-ZAK0T0B43KKyoQgSw_VOjb-GhC');
 
-  static const appVersion = '2.0.0';
+  static const appVersion = 'dev-1.0.0';
 
   /// Login memakai username; Supabase Auth butuh email, jadi username dipetakan ke <username>@domain ini.
   static const emailDomain = 'klontonk.local';

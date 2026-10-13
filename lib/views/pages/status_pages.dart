@@ -5,16 +5,10 @@ import '../theme.dart';
 import '../widgets/common.dart';
 
 class ForbiddenPage extends StatelessWidget {
-  const ForbiddenPage({super.key, this.subtitle = 'Halaman ini hanya dapat diakses oleh Admin.', this.title = 'Butuh Hak Akses Admin', this.hint = 'Jika Anda merasa ini keliru, hubungi admin pusat Anda.'});
+  const ForbiddenPage({super.key, this.subtitle = 'Menu ini tidak tersedia untuk peran akun Anda.', this.title = 'Tidak Punya Akses', this.hint = 'Jika Anda merasa ini keliru, hubungi kepala cashier Anda.'});
   final String subtitle;
   final String title;
   final String hint;
-
-  /// Untuk halaman input stok / harga: hanya akun tenant.
-  const ForbiddenPage.tenantOnly({super.key})
-      : subtitle = 'Stok tenant hanya bisa diinput oleh tenant itu sendiri.',
-        title = 'Khusus Akun Tenant',
-        hint = 'Akun admin hanya dapat melihat stok. Masuk dengan akun tenant untuk mengubahnya.';
 
   @override
   Widget build(BuildContext context) {

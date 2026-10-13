@@ -37,10 +37,10 @@ class _AkunView extends StatelessWidget {
           Row(children: [
             CircleAvatar(radius: 28, backgroundColor: p.primary, child: Text(user?.avatar ?? '?', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800))),
             const SizedBox(width: 14),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(user?.name ?? '-', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text('${user?.isAdmin == true ? 'Admin' : 'Kasir'} · @${user?.username ?? '-'}', style: TextStyle(color: p.textSecondary))])),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(user?.name ?? '-', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text('${user?.isAdmin == true ? 'Kepala Cashier' : 'Kasir'} · @${user?.username ?? '-'}', style: TextStyle(color: p.textSecondary))])),
           ]),
           const SizedBox(height: 10),
-          InfoRow('Role', user?.isAdmin == true ? 'Admin' : 'Kasir'),
+          InfoRow('Role', user?.isAdmin == true ? 'Kepala Cashier' : 'Kasir'),
           InfoRow('Cabang', vm.session.currentTenant.name),
           InfoRow('Login terakhir', user == null ? '-' : formatDateTime(user.loginTime), last: true),
         ]),
@@ -93,10 +93,18 @@ class _PengaturanView extends StatelessWidget {
           child: SegmentTabs<ThemeMode>(value: vm.theme.mode, options: const {ThemeMode.system: 'Sistem', ThemeMode.light: 'Terang', ThemeMode.dark: 'Gelap'}, onChanged: vm.theme.set),
         ),
         SectionCard(
+          title: 'Kamera Scan Barcode',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SegmentTabs<bool>(value: vm.scanFront, options: const {false: 'Belakang', true: 'Depan'}, onChanged: vm.setScanFront),
+            const SizedBox(height: 8),
+            Text('Dipakai di Stok Awal dan Transaksi. Bisa juga diganti langsung di layar scan.', style: TextStyle(fontSize: 12, color: context.pal.textMuted)),
+          ]),
+        ),
+        SectionCard(
           title: 'Struk',
           child: SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Cetak otomatis setelah pembayaran', style: TextStyle(fontWeight: FontWeight.w700)), subtitle: const Text('Dialog cetak sistem dibuka setiap pembayaran berhasil.'), value: vm.autoPrint, onChanged: vm.setAutoPrint),
         ),
-        SectionCard(title: 'Tentang', child: Column(children: [InfoRow('Versi aplikasi', 'v${vm.version}'), InfoRow('Cabang aktif', vm.session.currentTenant.name, last: true)])),
+        SectionCard(title: 'Tentang', child: Column(children: [InfoRow('Versi aplikasi', vm.version), InfoRow('Cabang aktif', vm.session.currentTenant.name, last: true)])),
       ]),
     );
   }

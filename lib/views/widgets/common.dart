@@ -107,13 +107,6 @@ class StatGrid extends StatelessWidget {
       );
 }
 
-class WideStat extends StatelessWidget {
-  const WideStat({super.key, required this.child});
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => child;
-}
-
 class Pill extends StatelessWidget {
   const Pill(this.text, {super.key, required this.color});
   final String text;

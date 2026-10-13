@@ -100,7 +100,6 @@ void main() {
 
   test('calendar helpers', () {
     expect(isSameDay(DateTime(2026, 1, 1, 1), DateTime(2026, 1, 1, 23)), isTrue);
-    expect(toIsoDate(DateTime(2026, 3, 7)), '2026-03-07');
     expect(mondayIndex(DateTime(2026, 10, 4)), 6); // Minggu
   });
 }

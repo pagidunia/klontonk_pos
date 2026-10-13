@@ -23,6 +23,12 @@ class AkunViewModel extends ChangeNotifier {
   String get version => AppConfig.appVersion;
   OutboxState get outbox => sales.outboxState;
   bool get autoPrint => prefs.autoPrint;
+  bool get scanFront => prefs.scanFront;
+
+  void setScanFront(bool front) {
+    prefs.setScanFront(front);
+    notifyListeners();
+  }
 
   void setAutoPrint(bool on) {
     prefs.setAutoPrint(on);

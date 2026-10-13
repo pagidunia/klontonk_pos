@@ -21,8 +21,8 @@ String? validateNewUser({required String username, required String password, req
   if (password.length > 128) return 'Password maksimal 128 karakter.';
   if (!RegExp(r'[A-Za-z]').hasMatch(password) || !RegExp(r'[0-9]').hasMatch(password)) return 'Password harus mengandung huruf dan angka.';
   if (password.toLowerCase().contains(uname)) return 'Password tidak boleh mengandung username.';
-  if (!['admin', 'cashier'].contains(role)) return 'Role tidak valid.';
-  if (!RegExp(r'^T\d{3}$').hasMatch(tenant)) return 'Tenant tidak valid.';
+  if (!['kepala_cashier', 'cashier'].contains(role)) return 'Role tidak valid.';
+  if (!RegExp(r'^T\d{3}$').hasMatch(tenant)) return 'Client tidak valid.';
   return null;
 }
 
@@ -68,11 +68,11 @@ class UsersViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _describe(AppError e) => e.status == 403 || e.code == '42501' ? 'Akses ditolak. Fitur ini hanya untuk Admin.' : describeError(e);
+  String _describe(AppError e) => e.status == 403 || e.code == '42501' ? 'Akses ditolak. Fitur ini hanya untuk Kepala Cashier.' : describeError(e);
 
   /// Membuat akun. Mengembalikan pesan galat atau null.
   Future<String?> create({required String username, required String password, required String name, required String role, required String tenant}) async {
-    if (!session.isAdmin) return 'Akses ditolak. Fitur ini hanya untuk Admin.';
+    if (!session.isAdmin) return 'Akses ditolak. Fitur ini hanya untuk Kepala Cashier.';
     final invalid = validateNewUser(username: username, password: password, name: name, role: role, tenant: tenant);
     if (invalid != null) return invalid;
     if (saving) return null;

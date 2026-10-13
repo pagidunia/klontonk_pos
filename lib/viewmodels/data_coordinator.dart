@@ -44,6 +44,10 @@ class DataCoordinator extends ChangeNotifier {
     notifyListeners();
 
     final tenants = await session.loadTenants();
+    await session.loadMenus();
+    if (!session.menusLoaded) {
+      _toast.show('Jatah menu belum bisa dimuat dari server, jadi sebagian menu disembunyikan. Periksa koneksi lalu muat ulang.', type: ToastType.warning, duration: const Duration(seconds: 9));
+    }
     if (tenants case Err(:final error) when error.expired) return _expired();
 
     final results = await Future.wait([stock.load(), sales.load(), returns.load()]);

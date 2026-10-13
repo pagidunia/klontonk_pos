@@ -21,10 +21,8 @@ class UserSession {
   final String tenantId;
   final DateTime loginTime;
 
-  bool get isAdmin => role == 'admin';
+  bool get isAdmin => role == 'kepala_cashier';
 
-  /// Stok tenant hanya boleh diinput oleh akun tenant itu sendiri; admin hanya membaca (juga ditegakkan RLS).
-  bool get canEditStock => !isAdmin;
 
   Json toJson() => {'id': id, 'username': username, 'name': name, 'role': role, 'avatar': avatar, 'tenant': tenantId, 'loginTime': loginTime.toIso8601String()};
 
