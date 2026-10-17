@@ -7,6 +7,9 @@ const namaBulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli
 const namaHari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 const hariPendek = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
+/// Nama metode bayar untuk tampilan.
+String methodLabel(String method) => switch (method) { 'tunai' => 'Tunai', 'utang' => 'Utang', _ => 'QRIS/Transfer' };
+
 String formatQty(num qty) => _angka.format(qty);
 String formatRupiah(num amount) => 'Rp ${_angka.format(amount)}';
 

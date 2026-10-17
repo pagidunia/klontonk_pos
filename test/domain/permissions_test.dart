@@ -3,13 +3,13 @@ import 'package:klontonk_pos/domain/permissions.dart';
 
 // Jatah dari Supabase (tabel role_menus), sama dengan isi awal db/role-menus.sql.
 const _kepalaDb = {
-  '/stok/awal', '/stok/keluar-laku', '/stok/retur', '/stok/total', '/kasir',
+  '/stok/awal', '/stok/keluar-laku', '/stok/retur', '/stok/total', '/kasir', '/kasir/utang',
   '/laporan/stok-awal', '/laporan/stok-keluar', '/laporan/stok-retur', '/laporan/stok-total', '/laporan/keuangan',
   '/harga', '/catatan', '/info-update',
   '/beranda/aksi/transaksi', '/beranda/aksi/cek-stok', '/beranda/aksi/update-harga', '/beranda/aksi/laporan-kasir', '/beranda/aksi/retur',
 };
 const _kasirDb = {
-  '/stok/keluar-laku', '/stok/total', '/kasir', '/laporan/stok-keluar', '/laporan/stok-total', '/catatan', '/info-update',
+  '/stok/keluar-laku', '/stok/total', '/kasir', '/kasir/utang', '/laporan/stok-keluar', '/laporan/stok-total', '/catatan', '/info-update',
   '/beranda/aksi/transaksi', '/beranda/aksi/cek-stok', '/beranda/aksi/laporan-kasir',
 };
 
@@ -52,6 +52,11 @@ void main() {
   test('jatah mengikuti tabel: mengubah baris mengubah akses', () {
     expect(canOpen(kasir, '/laporan/keuangan', menuDb: {..._kasirDb, '/laporan/keuangan'}), isTrue);
     expect(canOpen(kepala, '/harga', menuDb: {..._kepalaDb}..remove('/harga')), isFalse);
+  });
+
+  test('metode Utang ikut tabel: tersembunyi bila barisnya tidak ada', () {
+    expect(canOpen(kasir, '/kasir/utang', menuDb: _kasirDb), isTrue);
+    expect(canOpen(kasir, '/kasir/utang', menuDb: {..._kasirDb}..remove('/kasir/utang')), isFalse);
   });
 
   test('Tambah User tersembunyi sampai barisnya ada di tabel', () {

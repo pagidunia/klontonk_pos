@@ -7,6 +7,7 @@ import 'core/config.dart';
 import 'data/local/key_value_store.dart';
 import 'data/local/local_stores.dart';
 import 'data/repositories/auth_repository.dart';
+import 'data/repositories/ktp_repository.dart';
 import 'data/repositories/return_repository.dart';
 import 'data/repositories/role_menu_repository.dart';
 import 'data/repositories/sales_repository.dart';
@@ -43,7 +44,7 @@ Future<void> main() async {
   final authRepo = AuthRepository(db, detached);
   final session = SessionViewModel(auth: authRepo, tenants: TenantRepository(db), roleMenus: RoleMenuRepository(db), prefs: prefs, store: store, snapshots: snapshots, toast: toast);
   final stock = StockViewModel(StockRepository(db), session, snapshots);
-  final sales = SalesViewModel(repo: SalesRepository(db), auth: authRepo, session: session, stock: stock, outbox: outbox);
+  final sales = SalesViewModel(repo: SalesRepository(db), auth: authRepo, ktp: KtpRepository(db), session: session, stock: stock, outbox: outbox);
   final returns = ReturnsViewModel(ReturnRepository(db), session, stock, sales);
   final updates = UpdatesViewModel(UpdateRepository(db));
   final data = DataCoordinator(session: session, stock: stock, sales: sales, returns: returns, updates: updates, toast: toast);

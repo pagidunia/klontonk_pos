@@ -116,7 +116,7 @@ class SalesHistory extends StatelessWidget {
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(bottom: 10),
               title: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(_time(s), style: const TextStyle(fontWeight: FontWeight.w800)), Text(formatRupiah(s.total), style: const TextStyle(fontWeight: FontWeight.w800))]),
-              subtitle: Text('${s.no} · ${s.itemCount} item · ${s.method == 'tunai' ? 'Tunai' : 'QRIS/Transfer'}', style: TextStyle(fontSize: 12, color: p.textSecondary)),
+              subtitle: Text('${s.no} · ${s.itemCount} item · ${methodLabel(s.method)}', style: TextStyle(fontSize: 12, color: p.textSecondary)),
               children: [
                 for (final l in s.lines) Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text('${l.name}  ${formatQty(l.qty)} ${l.unit} × ${formatRupiah(l.price)}', style: const TextStyle(fontSize: 13))), Text(formatRupiah(l.subtotal), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700))])),
                 Align(alignment: Alignment.centerLeft, child: Text('Kasir: ${s.cashier}', style: TextStyle(fontSize: 12, color: p.textMuted))),

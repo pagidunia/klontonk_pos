@@ -29,6 +29,7 @@ BEGIN
     ('kepala_cashier', '/stok/retur'),
     ('kepala_cashier', '/stok/total'),
     ('kepala_cashier', '/kasir'),
+    ('kepala_cashier', '/kasir/utang'),
     ('kepala_cashier', '/laporan/stok-awal'),
     ('kepala_cashier', '/laporan/stok-keluar'),
     ('kepala_cashier', '/laporan/stok-retur'),
@@ -50,6 +51,7 @@ BEGIN
     ('cashier', '/beranda/aksi/cek-stok'),
     ('cashier', '/beranda/aksi/laporan-kasir'),
     ('cashier', '/kasir'),
+    ('cashier', '/kasir/utang'),
     ('cashier', '/laporan/stok-keluar'),
     ('cashier', '/laporan/stok-total')
   ON CONFLICT DO NOTHING;

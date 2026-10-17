@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Kamera dipakai untuk memindai barcode barang.</string>
+	<string>Kamera dipakai untuk memindai barcode barang dan memotret KTP pelanggan utang.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Foto dipilih dari galeri untuk melampirkan KTP pelanggan utang.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

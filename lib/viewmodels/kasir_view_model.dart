@@ -22,8 +22,12 @@ class KasirViewModel extends ChangeNotifier {
 
   Cart _cart = {};
   String query = '';
-  String method = 'tunai'; // 'tunai' | 'nontunai'
+  String method = 'tunai'; // 'tunai' | 'nontunai' | 'utang'
   String cashText = '';
+
+  /// Data pelanggan untuk penjualan utang.
+  String customerName = '';
+  Uint8List? ktpPhoto;
   bool paying = false;
   Receipt? receipt;
 
@@ -81,11 +85,23 @@ class KasirViewModel extends ChangeNotifier {
   void clearCart() {
     _cart = {};
     cashText = '';
+    customerName = '';
+    ktpPhoto = null;
     notifyListeners();
   }
 
   void setMethod(String value) {
     method = value;
+    notifyListeners();
+  }
+
+  void setCustomerName(String value) {
+    customerName = value;
+    notifyListeners();
+  }
+
+  void setKtpPhoto(Uint8List? bytes) {
+    ktpPhoto = bytes;
     notifyListeners();
   }
 
@@ -110,6 +126,11 @@ class KasirViewModel extends ChangeNotifier {
   /// Status pembayaran saat ini.
   ({int total, int? paid, bool canPay, String hint}) get payState {
     final total = summary.total;
+    if (method == 'utang') {
+      final namaOk = customerName.trim().length >= 2;
+      final hint = !namaOk ? 'Isi nama pelanggan' : (ktpPhoto == null ? 'Lampirkan foto KTP' : '');
+      return (total: total, paid: total, canPay: total > 0 && namaOk && ktpPhoto != null, hint: hint);
+    }
     if (method != 'tunai') return (total: total, paid: total, canPay: total > 0, hint: '');
     final paid = parseAmount(cashText);
     final canPay = paid != null && paid >= total && paid <= AppConfig.maxPayment && total > 0;
@@ -126,7 +147,8 @@ class KasirViewModel extends ChangeNotifier {
 
     paying = true;
     notifyListeners();
-    final result = await sales.checkout(method: method, paid: state.paid!, lines: current);
+    final debt = method == 'utang' ? DebtInfo(name: customerName.trim(), photo: ktpPhoto!) : null;
+    final result = await sales.checkout(method: method, paid: state.paid!, lines: current, debt: debt);
     paying = false;
 
     switch (result) {
@@ -136,6 +158,7 @@ class KasirViewModel extends ChangeNotifier {
         return error;
       case CheckoutOk(:final sale, :final offline):
         receipt = Receipt(
+          customerName: method == 'utang' ? customerName.trim() : null,
           no: sale.no,
           at: sale.at,
           cashier: sale.cashier,
@@ -149,6 +172,8 @@ class KasirViewModel extends ChangeNotifier {
         );
         _cart = {};
         cashText = '';
+        customerName = '';
+        ktpPhoto = null;
         notifyListeners();
         return null;
     }

@@ -8,6 +8,7 @@ import '../core/result.dart';
 import '../data/local/local_stores.dart';
 import '../data/models/models.dart';
 import '../data/repositories/auth_repository.dart';
+import '../data/repositories/ktp_repository.dart';
 import '../data/repositories/sales_repository.dart';
 import '../domain/outbox_logic.dart';
 import '../domain/sync.dart';
@@ -43,9 +44,10 @@ typedef OutboxState = ({int pending, int failed, List<OutboxEntry> entries});
 /// lokal; [flush] mengirimnya begitu ada jaringan. Tiap penjualan membawa UUID (client_id) sehingga
 /// pengiriman ulang tidak pernah menggandakannya.
 class SalesViewModel extends ChangeNotifier {
-  SalesViewModel({required SalesRepository repo, required AuthRepository auth, required SessionViewModel session, required StockViewModel stock, required OutboxStore outbox, bool Function()? isOnline, String Function()? newClientId})
+  SalesViewModel({required SalesRepository repo, required AuthRepository auth, required KtpRepository ktp, required SessionViewModel session, required StockViewModel stock, required OutboxStore outbox, bool Function()? isOnline, String Function()? newClientId})
       : _repo = repo,
         _auth = auth,
+        _ktp = ktp,
         _session = session,
         _stock = stock,
         _outbox = outbox,
@@ -54,6 +56,7 @@ class SalesViewModel extends ChangeNotifier {
 
   final SalesRepository _repo;
   final AuthRepository _auth;
+  final KtpRepository _ktp;
   final SessionViewModel _session;
   final StockViewModel _stock;
   final OutboxStore _outbox;
@@ -127,8 +130,9 @@ class SalesViewModel extends ChangeNotifier {
 
   /// Proses pembayaran. Hanya gangguan jaringan yang masuk antrean; penolakan database (stok kurang,
   /// harga kosong, dst.) ditampilkan ke kasir.
-  Future<CheckoutResult> checkout({required String method, required int paid, required List<CartLine> lines}) async {
+  Future<CheckoutResult> checkout({required String method, required int paid, required List<CartLine> lines, DebtInfo? debt}) async {
     final tenant = _session.tenantId;
+    if (method == 'utang') return _checkoutDebt(tenant: tenant, paid: paid, lines: lines, debt: debt);
     final clientId = _newClientId();
     final reqLines = [for (final l in lines) (id: l.id, qty: l.qty)];
 
@@ -149,6 +153,38 @@ class SalesViewModel extends ChangeNotifier {
       case Err(:final error):
         if (!error.isNetwork) return CheckoutFail(_describe(error));
         return _queueOffline(tenant: tenant, clientId: clientId, method: method, paid: paid, lines: lines);
+    }
+  }
+
+  static const _debtOfflineMessage = 'Penjualan utang butuh koneksi internet (foto KTP harus terunggah). Sambungkan internet lalu coba lagi.';
+
+  /// Penjualan utang: unggah foto KTP dulu, lalu checkout (nama + lokasi foto dicatat di transaksi yang sama).
+  /// TIDAK pernah masuk antrean offline. Bila checkout gagal, foto yang sudah terunggah dihapus.
+  Future<CheckoutResult> _checkoutDebt({required String tenant, required int paid, required List<CartLine> lines, required DebtInfo? debt}) async {
+    if (debt == null || debt.name.trim().length < 2 || debt.photo.isEmpty) return const CheckoutFail('Nama pelanggan dan foto KTP wajib diisi untuk penjualan utang.');
+    final clientId = _newClientId();
+    final path = '$tenant/$clientId.jpg';
+
+    final uploaded = await _ktp.upload(path, debt.photo);
+    if (uploaded case Err(:final error)) return CheckoutFail(error.isNetwork ? _debtOfflineMessage : 'Foto KTP gagal diunggah: ${_describe(error)}');
+
+    final result = await _repo.checkout(
+      tenant: tenant,
+      method: 'utang',
+      paid: paid,
+      lines: [for (final l in lines) (id: l.id, qty: l.qty)],
+      extra: {'p_client_id': clientId, 'p_debt_name': debt.name.trim(), 'p_debt_ktp': path},
+    );
+    switch (result) {
+      case Ok(:final data):
+        _data = {..._data, tenant: [...(_data[tenant] ?? const []), data]};
+        _stock.applySale(data.lines);
+        notifyListeners();
+        return CheckoutOk(data);
+      case Err(:final error):
+        await _ktp.remove(path);
+        if (error.code == schemaMissing) return const CheckoutFail('Fitur utang belum aktif di database. Jalankan db/utang.sql di Supabase.');
+        return CheckoutFail(error.isNetwork ? _debtOfflineMessage : _describe(error));
     }
   }
 

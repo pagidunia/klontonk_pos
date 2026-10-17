@@ -87,6 +87,7 @@ class FinanceSummary {
     required this.trx,
     required this.tunai,
     required this.nontunai,
+    required this.utang,
     required this.cashiers,
     required this.items,
     required this.buckets,
@@ -98,6 +99,7 @@ class FinanceSummary {
   final int trx;
   final int tunai;
   final int nontunai;
+  final int utang;
   final List<CashierTotal> cashiers;
   final List<ItemRevenue> items;
   final List<FinanceBucket> buckets;
@@ -141,6 +143,7 @@ FinanceSummary financeSummary(FinanceMode mode, DateRange range, List<Sale> sale
   var omzet = 0;
   var tunai = 0;
   var nontunai = 0;
+  var utang = 0;
   final cashiers = <String, CashierTotal>{};
   final items = <String, ItemRevenue>{};
   final buckets = financeBuckets(mode, range);
@@ -149,6 +152,8 @@ FinanceSummary financeSummary(FinanceMode mode, DateRange range, List<Sale> sale
     omzet += sale.total;
     if (sale.method == 'tunai') {
       tunai += sale.total;
+    } else if (sale.method == 'utang') {
+      utang += sale.total;
     } else {
       nontunai += sale.total;
     }
@@ -174,6 +179,7 @@ FinanceSummary financeSummary(FinanceMode mode, DateRange range, List<Sale> sale
     trx: salesIn.length,
     tunai: tunai,
     nontunai: nontunai,
+    utang: utang,
     cashiers: cashiers.values.toList()..sort((a, b) => b.revenue.compareTo(a.revenue)),
     items: items.values.toList()..sort((a, b) => b.revenue.compareTo(a.revenue)),
     buckets: buckets,

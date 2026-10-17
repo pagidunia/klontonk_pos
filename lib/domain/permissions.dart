@@ -21,6 +21,7 @@ const menuTerkelola = <String>{
   '/stok/retur',
   '/stok/total',
   '/kasir', // Transaksi
+  '/kasir/utang', // Metode bayar Utang di Transaksi
   '/laporan/stok-awal',
   '/laporan/stok-keluar',
   '/laporan/stok-retur',

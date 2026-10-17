@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../core/format.dart';
 
 typedef Json = Map<String, dynamic>;
@@ -140,7 +142,7 @@ class Sale {
   final String no;
   final DateTime at;
   final String cashier;
-  final String method; // 'tunai' | 'nontunai'
+  final String method; // 'tunai' | 'nontunai' | 'utang'
   final int total;
   final int paid;
   final List<SaleLine> lines;
@@ -214,6 +216,13 @@ class AppUpdate {
         description: (j['description'] as String?) ?? '',
         color: j['color'] as String,
       );
+}
+
+/// Data pelanggan untuk penjualan utang: nama + foto KTP (JPEG).
+class DebtInfo {
+  const DebtInfo({required this.name, required this.photo});
+  final String name;
+  final Uint8List photo;
 }
 
 class CartLine {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -272,7 +273,7 @@ class _CartSheetState extends State<_CartSheet> {
           child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(20, 0, 20, 12), children: [
             for (final l in lines) _LineTile(line: l),
             const SizedBox(height: 14),
-            SegmentTabs<String>(value: vm.method, options: const {'tunai': 'Tunai', 'nontunai': 'QRIS / Transfer'}, onChanged: vm.setMethod),
+            SegmentTabs<String>(value: vm.method, options: {'tunai': 'Tunai', 'nontunai': 'QRIS / Transfer', if (vm.session.can('/kasir/utang')) 'utang': 'Utang'}, onChanged: vm.setMethod),
             const SizedBox(height: 14),
             if (vm.method == 'tunai') ...[
               const Text('Uang diterima', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -282,7 +283,9 @@ class _CartSheetState extends State<_CartSheet> {
               Wrap(spacing: 8, runSpacing: 8, children: [for (final a in cashSuggestions(pay.total)) ActionChip(label: Text(a == pay.total ? 'Uang pas' : formatRupiah(a)), onPressed: () => vm.pickCash(a))]),
               const SizedBox(height: 12),
               _ChangeBox(total: pay.total, paid: pay.paid),
-            ] else
+            ] else if (vm.method == 'utang')
+              const _DebtForm()
+            else
               Text('Terima pembayaran lewat QRIS atau transfer sebesar total. Konfirmasi hanya setelah dana masuk.', style: TextStyle(color: p.textSecondary, fontSize: 13)),
           ]),
         ),
@@ -294,12 +297,94 @@ class _CartSheetState extends State<_CartSheet> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Total', style: TextStyle(color: p.textSecondary, fontSize: 15)), Text(formatRupiah(sum.total), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800))]),
               const SizedBox(height: 12),
-              SizedBox(width: double.infinity, child: FilledButton(onPressed: pay.canPay && !vm.paying ? _pay : null, child: Text(vm.paying ? 'Memproses…' : (pay.canPay || vm.method != 'tunai' ? 'Bayar ${formatRupiah(sum.total)}' : pay.hint)))),
+              SizedBox(width: double.infinity, child: FilledButton(onPressed: pay.canPay && !vm.paying ? _pay : null, child: Text(vm.paying ? 'Memproses…' : (pay.canPay || vm.method == 'nontunai' ? (vm.method == 'utang' ? 'Catat Utang ${formatRupiah(sum.total)}' : 'Bayar ${formatRupiah(sum.total)}') : pay.hint)))),
             ]),
           ),
         ),
       ]),
     );
+  }
+}
+
+/// Isian penjualan utang: nama pelanggan + foto KTP (kamera atau galeri). Foto KTP adalah data pribadi:
+/// diunggah ke bucket privat dan tidak disimpan di perangkat.
+class _DebtForm extends StatefulWidget {
+  const _DebtForm();
+
+  @override
+  State<_DebtForm> createState() => _DebtFormState();
+}
+
+class _DebtFormState extends State<_DebtForm> {
+  final _picker = ImagePicker();
+  final _name = TextEditingController();
+  bool _picking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _name.text = context.read<KasirViewModel>().customerName;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pick(ImageSource source) async {
+    final vm = context.read<KasirViewModel>();
+    final toast = context.read<AppDeps>().toast;
+    setState(() => _picking = true);
+    try {
+      final file = await _picker.pickImage(source: source, imageQuality: 75, maxWidth: 1600, maxHeight: 1600, preferredCameraDevice: CameraDevice.rear);
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.lengthInBytes > 5 * 1024 * 1024) {
+        toast.show('Foto terlalu besar (maksimal 5 MB). Coba foto ulang.', type: ToastType.warning);
+        return;
+      }
+      vm.setKtpPhoto(bytes);
+    } catch (_) {
+      toast.show('Foto tidak bisa diambil. Periksa izin kamera/galeri di pengaturan perangkat.', type: ToastType.danger);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final vm = context.watch<KasirViewModel>();
+    final Uint8List? foto = vm.ktpPhoto;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Nama pelanggan', style: TextStyle(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 6),
+      TextField(controller: _name, onChanged: vm.setCustomerName, maxLength: 80, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(hintText: 'Sesuai KTP', counterText: '', prefixIcon: Icon(Icons.person_outline))),
+      const SizedBox(height: 14),
+      const Text('Foto KTP', style: TextStyle(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 6),
+      if (foto != null)
+        Stack(children: [
+          ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(foto, height: 170, width: double.infinity, fit: BoxFit.cover)),
+          Positioned(right: 6, top: 6, child: IconButton.filled(style: IconButton.styleFrom(backgroundColor: Colors.black54), icon: const Icon(Icons.close, color: Colors.white, size: 18), tooltip: 'Hapus foto', onPressed: () => vm.setKtpPhoto(null))),
+        ])
+      else
+        Container(
+          height: 110,
+          width: double.infinity,
+          decoration: BoxDecoration(color: p.surface2, borderRadius: BorderRadius.circular(12), border: Border.all(color: p.border)),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.badge_outlined, color: p.textMuted, size: 30), const SizedBox(height: 4), Text('Belum ada foto KTP', style: TextStyle(color: p.textMuted, fontSize: 12.5))]),
+        ),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(onPressed: _picking ? null : () => _pick(ImageSource.camera), icon: const Icon(Icons.photo_camera_outlined), label: Text(foto == null ? 'Foto KTP' : 'Foto ulang'))),
+        const SizedBox(width: 10),
+        Expanded(child: OutlinedButton.icon(onPressed: _picking ? null : () => _pick(ImageSource.gallery), icon: const Icon(Icons.photo_library_outlined), label: const Text('Galeri'))),
+      ]),
+      const SizedBox(height: 8),
+      Text('Foto KTP adalah data pribadi: diunggah ke penyimpanan privat dan hanya bisa dilihat pengguna yang berhak atas cabang ini. Penjualan utang butuh internet.', style: TextStyle(fontSize: 11.5, color: p.textMuted)),
+    ]);
   }
 }
 
@@ -394,7 +479,7 @@ class _ReceiptView extends StatelessWidget {
               for (final l in receipt.lines) Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text('${l.name}\n${l.qty} × ${formatRupiah(l.price)}', style: const TextStyle(fontSize: 13.5))), Text(formatRupiah(l.subtotal), style: const TextStyle(fontWeight: FontWeight.w700))])),
               const Divider(),
               InfoRow('Total (${receipt.itemCount} barang)', formatRupiah(receipt.total)),
-              if (receipt.isCash) ...[InfoRow('Tunai', formatRupiah(receipt.paid)), InfoRow('Kembalian', formatRupiah(receipt.change), last: true, strong: true)] else InfoRow('Metode', Receipt.paymentLabel[receipt.method] ?? receipt.method, last: true),
+              if (receipt.isCash) ...[InfoRow('Tunai', formatRupiah(receipt.paid)), InfoRow('Kembalian', formatRupiah(receipt.change), last: true, strong: true)] else if (receipt.isDebt) ...[InfoRow('Metode', 'Utang'), InfoRow('Pelanggan', receipt.customerName ?? '-'), InfoRow('Status', 'Belum lunas', last: true, strong: true)] else InfoRow('Metode', Receipt.paymentLabel[receipt.method] ?? receipt.method, last: true),
             ]),
           ),
           const SizedBox(height: 12),

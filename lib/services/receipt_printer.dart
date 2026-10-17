@@ -32,6 +32,7 @@ Future<Uint8List> buildReceiptPdf(Receipt r) async {
       pw.Divider(thickness: 0.5),
       row('Total', formatRupiah(r.total), style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
       if (r.isCash) ...[row('Tunai', formatRupiah(r.paid)), row('Kembalian', formatRupiah(r.change))] else row('Metode', Receipt.paymentLabel[r.method] ?? r.method),
+      if (r.isDebt) ...[row('Pelanggan', r.customerName ?? '-'), row('Status', 'BELUM LUNAS', style: bold)],
       if (r.pending) pw.Padding(padding: const pw.EdgeInsets.only(top: 4), child: pw.Text('Struk sementara. Nomor transaksi resmi terbit setelah data terkirim ke server.', style: pw.TextStyle(fontSize: 7))),
       pw.SizedBox(height: 6),
       pw.Center(child: pw.Text('Terima kasih', style: base)),

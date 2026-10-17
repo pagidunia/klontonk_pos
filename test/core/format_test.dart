@@ -27,6 +27,12 @@ void main() {
     expect(sapaan(DateTime(2026, 1, 1, 20)), 'Selamat Malam');
   });
 
+  test('methodLabel', () {
+    expect(methodLabel('tunai'), 'Tunai');
+    expect(methodLabel('utang'), 'Utang');
+    expect(methodLabel('nontunai'), 'QRIS/Transfer');
+  });
+
   test('formatDateWithWeekday', () {
     expect(formatDateWithWeekday(DateTime(2026, 10, 7)), 'Rabu, 7 Okt 2026');
   });

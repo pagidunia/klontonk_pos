@@ -67,7 +67,7 @@ class _View extends StatelessWidget {
       ),
       SectionCard(
         title: 'Metode Pembayaran',
-        child: Column(children: [InfoRow('Tunai', formatRupiah(s.tunai)), InfoRow('QRIS / Transfer', formatRupiah(s.nontunai), last: true)]),
+        child: Column(children: [InfoRow('Tunai', formatRupiah(s.tunai)), InfoRow('QRIS / Transfer', formatRupiah(s.nontunai)), InfoRow('Utang (belum diterima)', formatRupiah(s.utang), last: true)]),
       ),
       if (s.cashiers.isNotEmpty)
         SectionCard(title: 'Per Kasir', child: Column(children: [for (var i = 0; i < s.cashiers.length; i++) InfoRow('${s.cashiers[i].name} · ${s.cashiers[i].trx} trx', formatRupiah(s.cashiers[i].revenue), last: i == s.cashiers.length - 1)])),

@@ -85,6 +85,19 @@ void main() {
       expect(s.buckets[0].revenue, 20000);
     });
 
+    test('utang dipisah dari tunai/non-tunai tetapi tetap masuk omzet', () {
+      final range = financeRange(FinanceMode.bulanan, rabu);
+      final s = financeSummary(FinanceMode.bulanan, range, [
+        sale(DateTime(2026, 10, 1, 10), total: 20000),
+        sale(DateTime(2026, 10, 2, 10), total: 15000, method: 'utang'),
+        sale(DateTime(2026, 10, 3, 10), total: 5000, method: 'nontunai'),
+      ], const []);
+      expect(s.omzet, 40000);
+      expect(s.tunai, 20000);
+      expect(s.nontunai, 5000);
+      expect(s.utang, 15000);
+    });
+
     test('tahunan memakai 12 batang bulan', () {
       final range = financeRange(FinanceMode.tahunan, rabu);
       final s = financeSummary(FinanceMode.tahunan, range, [sale(DateTime(2026, 3, 5), total: 7000)], const []);
